@@ -89,8 +89,10 @@ def clientthread():
 
                     else:
                         current_player_idx = (current_player_idx + 1) % 4
-                        croup.share_table(cards_on_table)
-                        croup.demand_play_card(current_player_idx)
+                        croup.demand_play_card(
+                            current_idx=current_player_idx, 
+                            table=cards_on_table
+                        )
 
         except Exception as e:
             print(e)

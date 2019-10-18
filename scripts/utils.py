@@ -53,8 +53,12 @@ def verify(signature, message, pub_key):
             hashes.SHA256()
         )
         return True
-    except cryptography.exceptions.InvalidSignature:
+    except cryptography.exceptions.InvalidSignature as e:
+        print(e)
         return False
+    except Exception as e:
+        print(e)
+        return e
 
 def encrypt(message, pub_key):
     ciphertext=None
@@ -88,3 +92,7 @@ def decrypt(cipher, prv_key):
         print(e)
         return e
 
+
+
+if __name__=='__main__':
+    main()

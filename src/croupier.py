@@ -47,7 +47,7 @@ class Croupier:
             }
             connection.send(json.dumps(payload).encode())
 
-    def demand_play_card(self, current_idx, bad_play='no harm done'):
+    def demand_play_card(self, current_idx=0, table=[], bad_play='no harm done'):
         current_player = self.players_order[current_idx]
         connection, address = current_player
         payload = {
@@ -55,6 +55,7 @@ class Croupier:
             "address": address[0] + ":" + str(address[1]),
             "order": current_idx,
             'bad_play': bad_play,
+            "table": table,
             "your_turn":True #this is pretty useless but let's go with it
         }
         connection.send(json.dumps(payload).encode())
@@ -89,12 +90,3 @@ class Croupier:
                 "missing players": 4-players_amount
             }
             connection.send(json.dumps(payload).encode())
-        
-    def share_table(self, table):
-        for player in self.players:
-            conn, add = player
-            payload = {
-                'operation': 'croupier@share_table',
-                'table': table
-            }
-            conn.send(json.dumps(payload).encode())
