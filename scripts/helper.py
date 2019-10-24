@@ -106,7 +106,7 @@ def signed_data(msg,encrypt=False):
   
 from flask import Flask
 from flask_cors import CORS
-app = Flask(name)
+app = Flask(__name__)
 CORS(app)
 from flask import request, abort
 
