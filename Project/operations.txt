@@ -1,0 +1,21 @@
+croupier@give_hand
+croupier@give_order_of_player
+croupier@play_card
+croupier@give_cards_to_loser
+
+
+
+player@has_two_of_clubs
+player@is_ready
+player@play
+
+
+
+order of ops:
+croupier@give_hand
+player@has_two_of_clubs
+croupier@give_order_of_player
+player@is_ready
+croupier@play_card (at the respective player)
+player@play
+croupier@give_cards_to_loser
