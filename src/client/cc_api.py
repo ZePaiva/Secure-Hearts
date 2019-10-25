@@ -14,6 +14,8 @@ pteidlib='/usr/local/lib/libpteidlib.so'
 
 pkcs11=PyKCS11.PyKCS11Lib()
 pkcs11.load(lib)
+for slot in pkcs11.getSlotList():
+    print(a)
 slot=pkcs11.getSlotList()[0]
 red='\033[91m'
 normal='\033[0m'
