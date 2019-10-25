@@ -1,4 +1,6 @@
 import json
+import struct
+from utils import send
 
 class Player:
     def __init__(self, hand=[], player_id=''):
@@ -23,13 +25,16 @@ class Player:
     def update_used_cards(self, cards):
         self.used_cards.extend(cards)
 
+
     def communicate_has_2C(self, s):
         payload = {
             "operation":"player@has_two_of_clubs",
             "player_id": self.id,
             "has_2C": "2C" in self.hand     
         }
-        s.send(json.dumps(payload).encode())
+        # s.send(json.dumps(payload).encode())
+        send(s, payload)
+
 
     def communicate_is_ready(self, s):
         payload = {
@@ -38,7 +43,9 @@ class Player:
             "order": self.order,
             "ready": True
         }
-        s.send(json.dumps(payload).encode())
+        # s.send(json.dumps(payload).encode())
+        send(s, payload)
+
 
     def play(self, s):
         card = ''
@@ -52,6 +59,8 @@ class Player:
             "order": self.order,
             "card" : str(card)  
         }
-        s.send(json.dumps(payload).encode())
+        # s.send(json.dumps(payload).encode())
+        send(s, payload)
+
 
 
