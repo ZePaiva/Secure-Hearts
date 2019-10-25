@@ -1,5 +1,7 @@
-from hearts import *
 import json
+import struct
+from hearts import *
+from utils import send
 
 class Croupier:
     def __init__(self, deck=[], players=[]):
@@ -8,6 +10,7 @@ class Croupier:
         self.players_order = []
         self.round = 0
         self.heart_brake = False
+        self.without_suits = {}
 
     def update_deck(self, deck):
         self.deck = deck.copy()
@@ -29,7 +32,8 @@ class Croupier:
                 "address": address[0] + ":" + str(address[1]),
                 "hand": hands[i]
             }
-            connection.send(json.dumps(payload).encode())
+            # connection.send(json.dumps(payload).encode())
+            send(connection, payload)
 
     def give_order(self, first_player):
         self.players_order = [first_player]
@@ -45,19 +49,22 @@ class Croupier:
                 "address": address[0] + ":" + str(address[1]),
                 "order":i
             }
-            connection.send(json.dumps(payload).encode())
+            # connection.send(json.dumps(payload).encode())
+            send(connection, payload)
 
-    def demand_play_card(self, current_idx, bad_play='no harm done'):
+    def demand_play_card(self, current_idx=0, table=[], bad_play='no harm done'):
         current_player = self.players_order[current_idx]
         connection, address = current_player
         payload = {
             "operation":"croupier@play_card",
             "address": address[0] + ":" + str(address[1]),
             "order": current_idx,
-            'bad_play': bad_play,
+            "bad_play": bad_play,
+            "table":table,
             "your_turn":True #this is pretty useless but let's go with it
         }
-        connection.send(json.dumps(payload).encode())
+        # connection.send(json.dumps(payload).encode())
+        send(connection, payload)
 
     def give_cards_to_loser(self, loser_idx, table_cards):
         player = self.players_order[loser_idx]
@@ -69,7 +76,9 @@ class Croupier:
             "cards": table_cards,
             "points": get_score(table_cards)
         }
-        connection.send(json.dumps(payload).encode())
+        # connection.send(json.dumps(payload).encode())
+        send(connection, payload)
+
         self.players_order = self.players_order[loser_idx:] + self.players_order[:loser_idx]
 
         for i in range(0, len(self.players_order)):
@@ -79,8 +88,9 @@ class Croupier:
                 "address": address[0] + ":" + str(address[1]),
                 "order":i
             }
-            connection.send(json.dumps(payload).encode())
-        
+            # connection.send(json.dumps(payload).encode())
+            send(connection, payload)
+            
     def missing_players(self, players_amount, players):
         for player in players:
             connection, address = player
@@ -88,13 +98,7 @@ class Croupier:
                 "operation": 'croupier@missing_players',
                 "missing players": 4-players_amount
             }
-            connection.send(json.dumps(payload).encode())
+            # connection.send(json.dumps(payload).encode())
+            send(connection, payload)
+
         
-    def share_table(self, table):
-        for player in self.players:
-            conn, add = player
-            payload = {
-                'operation': 'croupier@share_table',
-                'table': table
-            }
-            conn.send(json.dumps(payload).encode())
