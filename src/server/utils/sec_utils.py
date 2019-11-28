@@ -1,7 +1,7 @@
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 import sys
 import os
@@ -53,7 +53,8 @@ def load_key(path_to_key, password=None, private=True):
                     bytes(password, 'utf-8'),
                     default_backend()
                 )
-            
+    except:
+        print(error)
 
 def sign(message, priv_key):
     signature=None
@@ -139,7 +140,7 @@ def sym_encript(message, sec_key):
         print(e)
         return e
 
-def sym_decrypt(coded_msg, sec_key)
+def sym_decrypt(coded_msg, sec_key):
     try:
         iv = os.urandom(
             algorithms.AES.block_size // 8

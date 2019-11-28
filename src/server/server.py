@@ -5,7 +5,7 @@ import traceback
 from _thread import *
 from hearts import *
 from croupier import *
-from utils import send, receive
+from utils.server_utils import send, receive
 
 
 host = '0.0.0.0'

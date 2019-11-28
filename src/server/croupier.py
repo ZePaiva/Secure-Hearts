@@ -1,7 +1,7 @@
 import json
 import struct
 from hearts import *
-from utils import send
+from utils.server_utils import send
 
 class Croupier:
     def __init__(self, deck=[], players=[]):

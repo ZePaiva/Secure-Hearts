@@ -1,6 +1,6 @@
 import json
 import struct
-from utils import send
+from utils.server_utils import send
 
 class Player:
     def __init__(self, hand=[], player_id=''):
