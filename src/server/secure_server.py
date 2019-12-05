@@ -41,6 +41,7 @@ class SecureServer(object):
         self.game_over=False
         self.clients=[]
         self.previous_plays=[]
+        self.sec_clients_dict={}
 
     def start_and_listen(self):
         try:
@@ -64,19 +65,45 @@ class SecureServer(object):
             payload=json.loads(data)
             server_logger.info('Server received packet '+str(payload))
             oper=payload['operation']
-            if oper=='player@has_two_of_clubs':
+            # TODO: sign in proccess and authentication
+            if oper=='player@sign_in':
+                server_logger.info('Player@'+addr[0]+' signed in')
+                security_logger.info('Player public key stored')
+                self.player_update(addr, 'RSA_KEY', {'key': payload['key']})
+                if 'cipher_methods' in payload:
+                    self.player_update(addr, 'cipher_method', {'cipher_methods': payload['cipher_methods']})
+            # TODO: passage of cards between players
+            elif oper=='player@requesting_cards':
+                server_logger.info('Player@'+addr[0]+' requested '+payload['card_amount']+ ' cards')
+            # TODO: passage of cards between players and pick methods (?)
+            elif oper=='player@sign_cards':
+                server_logger.debug('Player@'+addr[0]+' signature received')
+                security_logger.debug('Player@'+addr[0]+' signature received and stored')
+                security_logger.info('Player@'+addr[0]+' signature method : \033[1;32m'+payload['sig_method'])
+                self.player_update(addr, 'signature', {'signature': payload['signature'], 'signature_method': payload['sig_method']})
+            # TODO: authentication
+            elif oper=='player@has_two_of_clubs':
                 self.croupier.without_suits[payload['player_id']] = []
                 if payload['has_2C']:
                     server_logger.info('Player '+str(addr[0])+':'+str(addr[1])+' has 2♣ (two of clubs)')
                     self.current_player_idx=0
                     self.croupier.give_order((conn, addr))
+            # TODO: ciphering of communications
             elif oper=='player@is_ready':
                 server_logger.info('Player '+str(self.current_player_idx)+' is ready')
                 if payload['order'] == self.current_player_idx:
                     self.croupier.demand_play_card(self.current_player_idx)
+            # TODO: ciphering of communications
             elif oper=='player@play':
                 if self.croupier.round==0 and self.current_player_idx==0 and payload['card']!='2C':
                     server_logger.warning('Player '+str(self.current_player_idx)+' played INVALID CARD:'+payload['card'])
+            # TODO: Reports on player side
+            elif oper=='player@report_bad_play':
+                server_logger.info('Player@'+addr[0]+' reported '+payload['reported_player']+ ' play')
+            # TODO: Get all cards from player and signature
+            elif oper=='player@show_cards':
+                server_logger.info('Player@'+addr[0]+' showed his cards')
+            # TODO: Nothing, this if is just for shits and giggles
             else:
                 server_logger.debug('Nothing happened, here\'s the payload:'+str(payload))
         except TypeError:
@@ -107,6 +134,22 @@ class SecureServer(object):
         server_logger.info('Game has started')
         self.croupier.update_players(self.clients)
         self.croupier.give_cards()
+
+    def player_update(self, player_addr, update_type, data_to_update):
+        if update_type='signature':
+            self.sec_clients_dict[player_addr].update({'signature': data_to_update['signature'], 'signature_method': data_to_update['sig_method']})
+            security_logger.info('Player@'+player_addr[0]+' signature and signature method updated')
+            security_logger.debug('Sig: '+data_to_update['signature']+' || Sig_M: '+data_to_update['sig_method'])
+        elif update_type='cipher_method':
+            self.sec_clients_dict[player_addr].update({'cipher_methods': data_to_update['cipher_method']})
+            security_logger.info('Player@'+player_addr[0]+' cipher method updated')
+            security_logger.debug('Ciphers: '+data_to_update['sig_method'])
+        elif update_type='RSA_KEY':
+            self.sec_clients_dict[player_addr].update({'public_key': data_to_update['key']})
+            security_logger.info('Player@'+player_addr[0]+' public key updated')
+            security_logger.debug('Pub_Key: '+data_to_update['sig_method'])
+        else:
+            server_logger(update_type+''+data_to_update)
 
 sec_serv=SecureServer()
 sec_serv.start_and_listen()

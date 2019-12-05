@@ -100,5 +100,3 @@ class Croupier:
             }
             # connection.send(json.dumps(payload).encode())
             send(connection, payload)
-
-        
