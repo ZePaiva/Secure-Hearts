@@ -19,14 +19,18 @@ from utils.server_utils import *
 from utils.server_utils import *
 
 # logging utils
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' )
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' )
 server_logger=logging.getLogger('SERVER')
 security_logger=logging.getLogger('SECURITY')
-log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue;programname=cyan')
-level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
-coloredlogs.install(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=log_colors)
 server_logger.setLevel(logging.DEBUG)
 security_logger.setLevel(logging.DEBUG)
+print(server_logger)
+print(security_logger)
+server_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
+level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
+coloredlogs.install(level='DEBUG', fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors, logger=server_logger )
+print(server_logger)
+print(security_logger)
 # socket utils
 host='0.0.0.0'
 port=8080
