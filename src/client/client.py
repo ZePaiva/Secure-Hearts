@@ -19,6 +19,15 @@ player = Player()
 
 def datathread(s):
     global player
+    payload={
+        "key": "ola",
+        "signature": "sig",
+        "sig_method": "method1",
+        "cipher_methods": "cipher_meth",
+        "name": "Nome",
+        "operation": "player@sign_in"
+    }
+    send(s, payload)
     while 1:
         # data = s.recv(1024)
         data = receive(s)

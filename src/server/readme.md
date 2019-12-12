@@ -1,13 +1,22 @@
 # Strucutres 
 ## Players
-> Address || Port (ID)
-> RSA Public Key
-> Player Signature
-> Simmetric Key
-> Score
-> Signature Method
-> Cipher Methods
+Name (ID)
+
+Address || Port
+
+RSA Public Key
+
+Player Signature
+
+Simmetric Key
+
+Score
+
+Signature Method
+
+Cipher Methods
 
 ## Table
-> Players
-> Previous Plays
+Players
+
+Previous Plays
