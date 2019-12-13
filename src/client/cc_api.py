@@ -29,15 +29,15 @@ class CC_API(object):
         self.pkcs11=PyKCS11.PyKCS11Lib()
         self.pkcs11.load(lib)
         self.slot=self.pkcs11.getSlotList()[0]
+        self.session=self.pkcs11.openSession(self.slot)
 
     # ask user pin
-
-    def ask_pin(self, session):
+    def ask_pin(self):
         while True:
             cli=Password(prompt="Ctizen Card Pin: ", hidden="*")
             usr_pin=cli.launch()
             try:
-                session.login(usr_pin)
+                self.session.login(usr_pin)
                 return None
             except PyKCS11Error:
                 print(red+'FAILURE... Bad Pin'+normal)
@@ -155,3 +155,6 @@ class CC_API(object):
             "name": commonname,
             "serialnumber": serialnumber
         }
+
+cc=CC_API()
+cc.ask_pin()

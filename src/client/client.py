@@ -27,7 +27,7 @@ def datathread(s):
         "name": "Nome",
         "operation": "player@sign_in"
     }
-    send(s, payload)
+    s.send(json.dumps(payload).encode())
     while 1:
         # data = s.recv(1024)
         data = receive(s)

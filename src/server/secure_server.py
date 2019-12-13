@@ -7,9 +7,11 @@ import socket
 import sys
 import json
 import traceback
+import time
 import uuid
 from pprint import pprint
 
+# threading lib
 from _thread import *
 
 # work bibs
@@ -17,72 +19,95 @@ from hearts import *
 from croupier import *
 from utils.server_utils import *
 from utils.server_utils import *
+from server_crypto import *
 
-# logging utils
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' )
-server_logger=logging.getLogger('SERVER')
-security_logger=logging.getLogger('SECURITY')
-server_logger.setLevel(logging.DEBUG)
-security_logger.setLevel(logging.DEBUG)
-print(server_logger)
-print(security_logger)
+# server logging
 server_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
 level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
-coloredlogs.install(level='DEBUG', fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors, logger=server_logger )
-print(server_logger)
-print(security_logger)
-# socket utils
-host='0.0.0.0'
-port=8080
+server_logger=logging.getLogger('SERVER')
+
+BUFFER_SIZE=512*1024
 
 class SecureServer(object):
-    def __init__(self):
+    def __init__(self, host, port, logLevel):
+        # logging
+        coloredlogs.install(level=logLevel, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
+
+        # server socket startup
         self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((host,port))
+        self.sock.listen(4)
+        server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
+        server_logger.debug('server up')
+
+        # game stuff 
         self.croupier=Croupier(deck=cards)
         self.current_player_idx=None
         self.cards_on_table=[]
         self.current_suite=None
         self.game_over=False
-        self.clients=[]
+        self.clients={}
         self.previous_plays=[]
-        self.sec_clients_dict={}
+        server_logger.debug('croupier up')
 
-    def start_and_listen(self):
-        try:
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.sock.bind((host,port))
-            self.sock.listen()
-            server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
-        except Exception as e:
-            server_logger.error(e)
-            sys.exit(1)
-        server_logger.info('Awaiting players')
+        # security stuff
+        self.crypto_actions=CryptographyServer(logLevel)
+        server_logger.debug('crypto up')
+
+    def client_accept(self, client_socket, client_addr):
+        if client_socket in self.clients:
+            server_logger.warning('Client %s already exists', client_socket)
+            return
+        self.clients[client_socket]={'address': client_addr}
+        server_logger.debug('Added client '+str(client_socket))
+
+    def client_remove(self, client_socket):
+        if client_socket not in self.clients:
+            server_logger.warning("Client %s doesn't exist", client_socket)
+            return
+        del self.clients[client_socket]
+        server_logger.debug('Deleting client '+str(client_socket))
+        client_socket.close()
+        server_logger.debug('Client deleted')
+
+    def listen(self):
+        server_logger.info('Now listening')
+        while True:
+            conn,addr=self.sock.accept()
+            self.client_accept(conn,addr)
+            self.croupier.missing_players(len(self.clients), self.clients)
+            start_new_thread(self.client_handler, ())
+            if len(self.clients.keys())==4:
+                self.game_start()
+            if self.game_over:
+                server_logger.info('Game Finished')
+                self.sock.close()
+                sys.exit(0)
 
     def client_handler(self):
         try:
-            conn, addr =self.clients[-1]
-            data=receive(conn)
+            conn, addr = list(self.clients.keys())[0],self.clients[list(self.clients.keys())[0]]
+            payload=json.loads(conn.recv(BUFFER_SIZE))
+            server_logger.debug(payload)
         except Exception as e:
             server_logger.error('Lost connection to client')
-            self.clients=self.clients[1:3]
+            self.client_remove(list(self.clients.keys())[0])
         try:
-            payload=json.loads(data)
-            server_logger.info('Server received packet '+str(payload))
+            server_logger.debug('Server received packet '+str(payload))
             oper=payload['operation']
-            # TODO: sign in proccess and authentication
+            # TODO: sign in method and multiple methods acceptance
             if oper=='player@sign_in':
-                self.player_sign_in(addr,payload)
-                server_logger.info('Player@'+addr[0]+' signed in with ID ')
-                security_logger.info('Player public key stored')
+                server_logger.info('Player@'+str(addr)+' trying to sign in')
+                signed, uuid = self.crypto_actions.sign_in(addr, payload, payload)
                 server_logger.debug('Updated players: '+str(self.sec_clients_dict))
             # TODO: passage of cards between players
             elif oper=='player@requesting_cards':
-                server_logger.info('Player@'+addr[0]+' requested '+payload['card_amount']+ ' cards')
+                start = self.crypto_actions.start_card_distribution(addr)
             # TODO: passage of cards between players and pick methods (?)
             elif oper=='player@sign_cards':
                 server_logger.debug('Player@'+addr[0]+' signature received')
-                security_logger.debug('Player@'+addr[0]+' signature received and stored')
-                security_logger.info('Player@'+addr[0]+' signature method : \033[1;32m'+payload['sig_method'])
+                self.crypto_actions.cards_signature(addr, payload)
                 self.player_update(addr, 'signature', {'signature': payload['signature'], 'signature_method': payload['sig_method']})
             # TODO: authentication
             elif oper=='player@has_two_of_clubs':
@@ -103,6 +128,7 @@ class SecureServer(object):
             # TODO: Reports on player side
             elif oper=='player@report_bad_play':
                 server_logger.info('Player@'+addr[0]+' reported '+payload['reported_player']+ ' play')
+                self.crypto_actions.fraud_called(payload_1, payload_2)
             # TODO: Get all cards from player and signature
             elif oper=='player@show_cards':
                 server_logger.info('Player@'+addr[0]+' showed his cards')
@@ -113,25 +139,6 @@ class SecureServer(object):
             server_logger.exception('Error: Received empty packet')
         except KeyError as e:
             server_logger.exception('Error with key: '+str(e))
-
-    def client_accepter(self):
-        try:
-            conn,addr=self.sock.accept()
-            self.clients.append((conn,addr))
-            server_logger.info('Connection established with HOST='+str(addr[0])+' PORT='+str(addr[1]))
-            self.croupier.missing_players(len(self.clients), self.clients)
-            start_new_thread(self.client_handler, ())
-            if len(self.clients)==4:
-                self.game_start()
-            if self.game_over:
-                server_logger.info('Game has finished, exiting')
-                self.sock.close()
-                sys.exit(0)
-        except Exception as e:
-            server_logger.error('Error: '+str(e))
-            self.sock.close()
-            traceback.print_exc()
-            sys.exit(1)
 
     def game_start(self):
         server_logger.info('Game has started')
@@ -154,24 +161,24 @@ class SecureServer(object):
         else:
             server_logger(update_type+''+data_to_update)
 
-    def player_sign_in(self, player_addr, payload_day_0):
+    def pause(self):
+        server_logger.info('Server paused, press CTRL+C again to exit')
         try:
-            server_logger.debug('playr_addr: '+str(player_addr))
-            server_logger.debug('playr_payload: '+str(payload_day_0))
-            self.sec_clients_dict.update({player_addr: 
-                                          {
-                                            'name': payload_day_0['name'],
-                                            'public_key': payload_day_0['key'],
-                                            'signature': payload_day_0['signature'],
-                                            'cipher_methods': payload_day_0['cipher_methods'],
-                                            'signature_method': payload_day_0['sig_method']
-                                          }})
-            server_logger.debug('payload: '+str(payload_day_0))
-        except Exception as e:
-            server_logger.exception('Exception '+e+' @ player_sign_in')
+            self.sock.close()
+        except:
+            server_logger.exception("Server Stopping")
 
-sec_serv=SecureServer()
-sec_serv.start_and_listen()
-while 1:
-    sec_serv.client_accepter()
+        for client in self.clients:
+            client.close()
+        self.clients=[]
+        time.sleep(5)
 
+    def exit(self):
+        server_logger.info('Exiting...')
+        self.sock.close()
+        sys.exit(0)
+
+    def emergency_exit(self, e):
+        server_logger.exception('Exception: '+str(e))
+        self.sock.close()
+        sys.exit(1)

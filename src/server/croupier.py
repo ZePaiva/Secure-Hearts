@@ -93,7 +93,7 @@ class Croupier:
             
     def missing_players(self, players_amount, players):
         for player in players:
-            connection, address = player
+            connection, address = player, players[player]
             payload = {
                 "operation": 'croupier@missing_players',
                 "missing players": 4-players_amount
