@@ -1,12 +1,22 @@
+# to not debug with prints
+import logging
+import coloredlogs
+
 import json
 import struct
 from hearts import *
 from utils.server_utils import send
 
+# croup logging
+croup_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
+level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
+croup_logger=logging.getLogger('CROUPIER')
+
 class Croupier:
-    def __init__(self, deck=[], players=[]):
+    def __init__(self, deck=[], players={}):
         self.deck = deck.copy()
-        self.players = players.copy()
+        self.players={}
+        self.players.update(players)
         self.players_order = []
         self.round = 0
         self.heart_brake = False
@@ -16,24 +26,26 @@ class Croupier:
         self.deck = deck.copy()
 
     def update_players(self, players):
-        self.players = players.copy()
+        self.players.update(players)
 
     def give_cards(self):
-        assert(len(self.players) == 4)
         shuffled = shuffle(self.deck.copy())
         hands = [[],[],[],[]]
         for i in range(0, len(shuffled)):
             hands[i%4].append(shuffled[i])
 
-        for i in range(0, len(self.players)):
-            connection, address = self.players[i]
+        croup_logger.debug('Hands: '+str(hands))
+        for i in range(0, len(list(self.players.keys()))):
+            conn=list(self.players.keys())[i]
+            address = self.players[conn]['address']
+            print()
             payload = {
                 "operation":"croupier@give_cards",
                 "address": address[0] + ":" + str(address[1]),
                 "hand": hands[i]
             }
-            # connection.send(json.dumps(payload).encode())
-            send(connection, payload)
+            conn.send(json.dumps(payload).encode())
+            #send(list(self.players.keys())[i], payload)
 
     def give_order(self, first_player):
         self.players_order = [first_player]
