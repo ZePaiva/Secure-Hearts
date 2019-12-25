@@ -38,14 +38,16 @@ class Croupier:
         for i in range(0, len(list(self.players.keys()))):
             conn=list(self.players.keys())[i]
             address = self.players[conn]['address']
-            print()
             payload = {
                 "operation":"croupier@give_cards",
                 "address": address[0] + ":" + str(address[1]),
                 "hand": hands[i]
             }
-            conn.send(json.dumps(payload).encode())
-            #send(list(self.players.keys())[i], payload)
+            croup_logger.debug(self.players)
+            croup_logger.debug(self.players[conn])
+            self.players[conn]['output_buffer']+=json.dumps(payload)
+            #conn.send(json.dumps(payload).encode())
+            #send(conn, payload)
 
     def give_order(self, first_player):
         self.players_order = [first_player]
@@ -104,11 +106,16 @@ class Croupier:
             send(connection, payload)
             
     def missing_players(self, players_amount, players):
-        for player in players:
-            connection, address = player, players[player]
+        croup_logger.debug(self.players)
+        for i in range(0, len(list(self.players.keys()))):
+            conn=list(self.players.keys())[i]
+            address = self.players[conn]['address']
             payload = {
                 "operation": 'croupier@missing_players',
                 "missing players": 4-players_amount
             }
+            croup_logger.debug(self.players[conn])
+            croup_logger.debug(payload)
+            self.players[conn]['output_buffer']+=json.dumps(payload)
             # connection.send(json.dumps(payload).encode())
-            send(connection, payload)
+            #send(connection, payload)

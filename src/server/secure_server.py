@@ -25,6 +25,7 @@ server_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magen
 level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
 server_logger=logging.getLogger('SERVER')
 
+# buffers stuff
 BUFFER_SIZE=512*1024
 
 class SecureServer(object):
@@ -91,6 +92,7 @@ class SecureServer(object):
             return
         try:
             payload=self.clients[sock]['output_buffer'][:BUFFER_SIZE]
+            server_logger.debug('Sending package '+str(payload)+' to '+str(sock))
             bytes_sent=sock.send(payload.encode())
             server_logger.debug('Client: '+str(self.clients[sock])+' Message: '+str(self.clients[sock]['output_buffer'][:bytes_sent]))
             self.clients[sock]['output_buffer']=self.clients[sock]['output_buffer'][bytes_sent:]
@@ -105,7 +107,7 @@ class SecureServer(object):
         while True:
             inputs = [self.sock] + list(self.clients.keys())
             outputs= [sock for sock in self.clients if len(self.clients[sock]['output_buffer'])>0]
-            readable, writable, exceptional = select.select(inputs, outputs, inputs)
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, 1000)
             server_logger.debug('Handling sockets inputs')
             for sock in readable:
                 if sock is self.sock:
@@ -135,65 +137,9 @@ class SecureServer(object):
 
     def client_handle(self, client_socket):
         payload=self.clients[client_socket]['input_buffer']
-        self.clients[client_socket]['input_buffer']=''
         server_logger.debug(payload)
+        self.clients[client_socket]['input_buffer']=''
         server_logger.debug(self.clients[client_socket])
-
-
-    #def client_handler(self):
-    #    try:
-    #        conn, addr = list(self.clients.keys())[0],self.clients[list(self.clients.keys())[0]]
-    #        payload=json.loads(conn.recv(BUFFER_SIZE))
-    #        server_logger.debug(payload)
-    #    except Exception as e:
-    #        server_logger.error('Lost connection to client')
-    #        self.client_remove(list(self.clients.keys())[0])
-    #    try:
-    #        server_logger.debug('Server received packet '+str(payload))
-    #        oper=payload['operation']
-    #        # TODO: sign in method and multiple methods acceptance
-    #        if oper=='player@sign_in':
-    #            server_logger.info('Player@'+str(addr)+' trying to sign in')
-    #            signed, uuid = self.crypto_actions.sign_in(addr, payload, payload)
-    #            server_logger.debug('Updated players: '+str(self.sec_clients_dict))
-    #        # TODO: passage of cards between players
-    #        elif oper=='player@requesting_cards':
-    #            start = self.crypto_actions.start_card_distribution(addr)
-    #        # TODO: passage of cards between players and pick methods (?)
-    #        elif oper=='player@sign_cards':
-    #            server_logger.debug('Player@'+addr[0]+' signature received')
-    #            self.crypto_actions.cards_signature(addr, payload)
-    #            self.player_update(addr, 'signature', {'signature': payload['signature'], 'signature_method': payload['sig_method']})
-    #        # TODO: authentication
-    #        elif oper=='player@has_two_of_clubs':
-    #            self.croupier.without_suits[payload['player_id']] = []
-    #            if payload['has_2C']:
-    #                server_logger.info('Player '+str(addr[0])+':'+str(addr[1])+' has 2♣ (two of clubs)')
-    #                self.current_player_idx=0
-    #                self.croupier.give_order((conn, addr))
-    #        # TODO: ciphering of communications
-    #        elif oper=='player@is_ready':
-    #            server_logger.info('Player '+str(self.current_player_idx)+' is ready')
-    #            if payload['order'] == self.current_player_idx:
-    #                self.croupier.demand_play_card(self.current_player_idx)
-    #        # TODO: ciphering of communications
-    #        elif oper=='player@play':
-    #            if self.croupier.round==0 and self.current_player_idx==0 and payload['card']!='2C':
-    #                server_logger.warning('Player '+str(self.current_player_idx)+' played INVALID CARD:'+payload['card'])
-    #        # TODO: Reports on player side
-    #        elif oper=='player@report_bad_play':
-    #            server_logger.info('Player@'+addr[0]+' reported '+payload['reported_player']+ ' play')
-    #            self.crypto_actions.fraud_called(payload_1, payload_2)
-    #        # TODO: Get all cards from player and signature
-    #        elif oper=='player@show_cards':
-    #            server_logger.info('Player@'+addr[0]+' showed his cards')
-    #        # TODO: Nothing, this if is just for shits and giggles
-    #        else:
-    #            server_logger.debug('Nothing happened, here\'s the payload:'+str(payload))
-    #    except TypeError as e:
-    #        server_logger.exception('Error: Received empty packet')
-    #    except KeyError as e:
-    #        server_logger.exception('Error with key: '+str(e))
 
     def game_start(self):
         server_logger.info('Game has started')

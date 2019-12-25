@@ -1,21 +1,75 @@
-import socket
+# basic stuff
 import sys
 import json
 import time
 import traceback
-from player import *
 from _thread import *
+from socket import *
+
+# game stuff
+from player import *
 from utils import receive
 
-host = '0.0.0.0'
-port = 8080
+# to not debug with prints
+import logging
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((host,port))
+# pretty up stuff
+from bullet import *
+from termcolor import colored
+
+# server stuff
+BUFFER_SIZE=512*1024
+
+# client logging
+client_logger=logging.getLogger('CLIENT')
+fh_log=logging.fileHandler('log/client_'+str(int(time.time()))+'.logs')
+fh_log.setLevel(logging.DEBUG)
+fh_log.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+client_logger.addHandler(fh_log)
 
 # game related
 player = Player()
 
+class Client(object):
+    def __init__(self, host='0.0.0.0', port=8080):
+        # client stuff
+        self.sock=socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((host, port))
+        self.username=''
+
+        # client security stuff
+        self.uuid=None
+        self.RSA_key=None
+        self.cipher_methods=None
+
+        # CC stuff
+        self.cc_cert=None
+        self.cc_pin=None
+
+        self.connect()
+
+    def send(self, payload, server_res=True):
+        data=json.dumps(payload)
+        while len(data):
+            self.sock.send(data[:BUFFER_SIZE].encode())
+            data=data[BUFFER_SIZE:]
+        if server_res:
+            try:
+                res=json.loads(self.sock(BUFFER_SIZE).decode())
+                return res
+            except Exception as e:
+                client_logger.exception('Unexpected error: '+str(e))
+
+    def connect(self):
+        print('##########################')
+        print('#          LOGIN         #')
+        print('##########################')
+        print("# INSERT CC, ELSE WON'T  #")
+        print("#           WORK         #")
+        print('##########################')
+        
+        # get cc certificate and put it on self.cc_cert
+        #
 
 def datathread(s):
     global player
