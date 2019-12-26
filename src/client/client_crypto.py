@@ -40,6 +40,14 @@ class CryptographyClient(object):
         self.previous_MAC=None
         self.salt_dict={}
 
+    # send the first message
+    # message has format: 
+    # {
+    #   'operation': 'player@sign_in',
+    #   'message': decoded-base64-encoded-message json,
+    #   'signature': signature to verify authenticity,
+    #   'certificate': to verify chain of trust
+    # }
     def secure_init_message(self, username):
         # generate ephemeral keys
         sec_logger.debug('Generating ECDH key pair')
@@ -82,10 +90,26 @@ class CryptographyClient(object):
         # creating package
         sec_logger.debug('packaging first message')
         package={
-            'operation': 'palyer@sign_in',
+            'operation': 'player@sign_in',
             'message': prep.decode('utf-8'),
             'signature': signature,
             'certificate': serialize_cert(self.cc_cert)
         }
         sec_logger.debug('first package is: \n'+str(package))
         return package
+
+    # receive and decipher messages
+    # message has format: 
+    # {
+    #   'operation': string,
+    #   'message': decoded-base64-encoded-message json,
+    #   'signature': signature to verify authenticity,
+    #   'certificate': to verify chain of trust
+    # }
+    def decipher_secure_server_message(self, ciphered_message):
+        sec_logger.debug('Deciphering secure message')
+
+        # is first_message ?
+        if self.prev_mac is None:
+            peer_certificate=deserialize_cert(ciphered_message['certificate'])
+            #MUST IMPLEMENT CERTIFICATE VALIDATION
