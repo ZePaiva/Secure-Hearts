@@ -49,8 +49,8 @@ class CC_API(object):
 
     # get public key from cc:
     def get_pubKey(self, pin=None):
+        session=self.pkcs11.openSession(self.slot)
         try:
-            session=self.pkcs11.openSession(self.slot)
             session.login(pin)
             pb_key=session.findObjects(
                 [
@@ -76,12 +76,41 @@ class CC_API(object):
             return None
         return public_key
 
+    # get certificate from public key
+    def get_pubKey_cert(self):
+        session=self.pkcs11.openSession(self.slot)
+        try:
+            cc_certs_obj=session.findObjects(
+                [
+                    (CKA_CLASS, CKO_CERTIFICATE)
+                ]
+            )
+            for cert_obj in cc_certs_obj:
+                cert_val=session.getAttributeValue(
+                    cert_obj,
+                    [CKA_VALUE],
+                    True
+                )[0]
+                cert=load_der_x509_certificate(
+                    bytes(cert_val),
+                    default_backend()
+                )
+                cert_issuer = cert.issuer
+                issuer=cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+                if 'EC de Autenticação do Cartão de Cidadão 00' in issuer:
+                    return cert
+        except Exception as e:
+            session.closeSession()
+            print(e)
+            return None
+        return None
+
+
     # get certificates
-    def get_all_certs(self, pin=None):
+    def get_all_certs(self):
         certs=[]
         session=self.pkcs11.openSession(self.slot)
         try:
-            session.login(pin)
             cc_certs_obj=session.findObjects(
                 [
                     (CKA_CLASS, CKO_CERTIFICATE)
@@ -98,10 +127,8 @@ class CC_API(object):
                     default_backend()
                 )
                 certs+=[cert]
-            session.logout()
             session.closeSession()
         except Exception as e:
-            session.logout()
             session.closeSession()
             print(red+e+normal)
             return None
@@ -109,7 +136,7 @@ class CC_API(object):
 
     # sign data with citizen card 
     def cc_sign(self, data, pin=None, cipher_method=Mechanism(CKM_SHA1_RSA_PKCS)):
-        ession=self.pkcs11.openSession(self.slot)
+        session=self.pkcs11.openSession(self.slot)
         try:
             session.login(pin)
             prv_key=session.findObjects(
@@ -153,4 +180,4 @@ class CC_API(object):
 #API=CC_API()
 #pin=API.ask_pin()
 #print(pin)
-#print(API.get_citizen_card_info())
+#print(API.get_pubKey_cert())
