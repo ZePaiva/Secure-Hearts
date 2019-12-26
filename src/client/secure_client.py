@@ -10,6 +10,7 @@ from _thread import *
 
 # sec stuff
 from cc_api import CC_API
+from utils.sec_utils import *
 from cryptography.hazmat.primitives import hashes
 
 # game stuff
@@ -20,6 +21,7 @@ import logging
 
 # pretty up stuff
 from bullet import *
+from bullet import emojis
 from termcolor import colored
 
 # server stuff
@@ -73,21 +75,103 @@ class Client(object):
                 client_logger.exception('Unexpected error: '+str(e))
 
     def pick_ciphers(self):
-        return {
-            'HASH': '256',
-            'AES_MODE': 'CBC',
-            'AES_SIZE': '256',
-            'AES_PADDING': 'OAEP',
-            'RSA_SIZE': '2048',
-            'RSA_PADDING': 'PSS',
-        }
+        hash_types=['MD5','SHA2','SH3']
+        sym_alg_types=['AES','CAM','FER']
+        sym_mode_types=['CBC','CTR','OFB','CFB','CFB8']
+        padd_types=['OAEP','PKCS1v15','PSS']
+        cli=YesNo(prompt='Do you wish to pick your cipher suite (default is SHA1-AES-CBC-OAEP-PSS-SHA3)? ')
+        cl=cli.launch()
+        if not cl:
+            return "SHA1-AES-CBC-OAEP-PSS-SHA3"
+        cli=SlidePrompt(
+            [
+                Bullet(
+                        prompt='Regular hash method to use: ',
+                        choices=hash_types,
+                        align= 5, 
+                        bullet="●",
+                        bullet_color=colors.foreground["magenta"],
+                        word_color=colors.foreground["white"],
+                        word_on_switch=colors.foreground["black"],
+                        background_color=colors.background["black"],
+                        background_on_switch=colors.background["white"],
+                        pad_right = 5
+                ),
+                Bullet(
+                        prompt='Symmetric ciphering algorithm: ',
+                        choices=sym_alg_types,
+                        align= 5, 
+                        bullet="●",
+                        bullet_color=colors.foreground["magenta"],
+                        word_color=colors.foreground["white"],
+                        word_on_switch=colors.foreground["black"],
+                        background_color=colors.background["black"],
+                        background_on_switch=colors.background["white"],
+                        pad_right = 5
+                ),
+                Bullet(
+                        prompt='Symmetric ciphering mode: ',
+                        choices=sym_mode_types,
+                        align= 5, 
+                        bullet="●",
+                        bullet_color=colors.foreground["magenta"],
+                        word_color=colors.foreground["white"],
+                        word_on_switch=colors.foreground["black"],
+                        background_color=colors.background["black"],
+                        background_on_switch=colors.background["white"],
+                        pad_right = 5
+                ),
+                Bullet(
+                        prompt='Asymmetric ciphering padding: ',
+                        choices=padd_types,
+                        align= 5, 
+                        bullet="●",
+                        bullet_color=colors.foreground["magenta"],
+                        word_color=colors.foreground["white"],
+                        word_on_switch=colors.foreground["black"],
+                        background_color=colors.background["black"],
+                        background_on_switch=colors.background["white"],
+                        pad_right = 5
+                ),
+                Bullet(
+                        prompt='Asymmetric signing padding: ',
+                        choices=padd_types,
+                        align= 5, 
+                        bullet="●",
+                        bullet_color=colors.foreground["magenta"],
+                        word_color=colors.foreground["white"],
+                        word_on_switch=colors.foreground["black"],
+                        background_color=colors.background["black"],
+                        background_on_switch=colors.background["white"],
+                        pad_right = 5
+                ),
+                Bullet(
+                        prompt='Asymmetric signing hashing: ',
+                        choices=hash_types,
+                        align= 5, 
+                        bullet="●",
+                        bullet_color=colors.foreground["magenta"],
+                        word_color=colors.foreground["white"],
+                        word_on_switch=colors.foreground["black"],
+                        background_color=colors.background["black"],
+                        background_on_switch=colors.background["white"],
+                        pad_right = 5
+                )
+            ]
+        )
+        rez=cli.launch()
+        types=[]
+        for r in rez:
+            types+=[r[1]]
+        suite=types[0]+"-"+types[1]+'-'+types[2]+'-'+types[3]+'-'+types[4]+'-'+types[5]
+        client_logger.info('SUITE: '+suite)
+        return get_cipher_methods(suite)
 
     def connect(self):
         print('##########################')
         print('#          LOGIN         #')
         print('##########################')
-        print("# INSERT CC, ELSE WON'T  #")
-        print("#           WORK         #")
+        print("#        INSERT CC       #")
         print('##########################')
         cli=YesNo(prompt='Will you be using CC? ')
         self.cc_on=cli.launch()
@@ -105,7 +189,6 @@ class Client(object):
             cli=YesNo(prompt='Cache CC pin? ')
             if cli.launch():
                 self.cc_pin=cc_api.ask_pin()
-
         else:
             client_logger.debug('no cert')
             self.uuid=uuid.uuid1()
@@ -118,6 +201,7 @@ class Client(object):
         keys_files= os.path.join(KEYS,str(self.uuid)+'_key')
         if not os.path.exists(keys_files):
             self.cipher_methods=self.pick_ciphers()
+            print(self.cipher_methods)
 
 
 client=Client(logLevel='DEBUG')

@@ -1,4 +1,6 @@
-import base64 import sys import os
+import base64 
+import sys 
+import os
 
 from cryptography.fernet import Fernet
 from cryptography.exceptions import *
@@ -189,7 +191,7 @@ def generate_mac(key, data, hash_alg='SHA2'):
 #   -> usr: integer
 # returns:
 #   -> None
-def write_private_key(key, usr)
+def write_private_key(key, usr):
     with open(os.path.join(key, str(uid), '/prv_rsa'), 'wb') as file:
         payload=key.private_bytes(
             serialization.Encoding.PEM,
@@ -202,7 +204,7 @@ def write_private_key(key, usr)
 #   -> usr: integer
 # returns:
 #   -> RSAPrivateKey
-def write_public_key(key, usr)
+def write_public_key(key, usr):
     with open(os.path.join(key, str(uid), '/prv_rsa'), 'rb') as file:
         payload=serialization.load_pem_private_key(
             file.read(),
@@ -216,7 +218,7 @@ def write_public_key(key, usr)
 #   -> usr: integer
 # returns:
 #   -> None
-def write_public_key(key, usr)
+def write_public_key(key, usr):
     with open(os.path.join(key, str(uid), '/pub_rsa'), 'wb') as file:
         payload=key.public_bytes(
             serialization.Encoding.PEM,
@@ -228,7 +230,7 @@ def write_public_key(key, usr)
 #   -> usr: integer
 # returns:
 #   -> RSAPublicKey
-def write_public_key(key, usr)
+def write_public_key(key, usr):
     with open(os.path.join(key, str(uid), '/pub_rsa'), 'rb') as file:
         payload=serialization.load_pem_public_key(
             file.read(),
@@ -404,7 +406,7 @@ def deserialize_key(serialized_key):
 #       }
 # possible values:
 #   [HASH_ALG]    = MD5  | SHA2     | SHA3
-#   [SYM_ALG]     = AES  | CAM      | FERN
+#   [SYM_ALG]     = AES  | CAM      | FER
 #   [SYM_MODE]    = CBC  | CTR      | OFB  | CFB | CFB8 
 #   [CIPHER_PADD] = OAEP | PKCS1v15 | PSS
 #   [SIGN_PADD]   = OAEP | PKCS1v15 | PSS
