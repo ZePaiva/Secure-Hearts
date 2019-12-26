@@ -82,13 +82,13 @@ class Client(object):
                 client_logger.exception('Unexpected error: '+str(e))
 
     def pick_ciphers(self):
-        hash_types=['MD5','SHA2','SH3']
+        hash_types=['MD5','SHA2','SHA3']
         sym_alg_types=['AES','CAM','FER']
         sym_mode_types=['CBC','CTR','OFB','CFB','CFB8']
         padd_types=['OAEP','PKCS1v15','PSS']
-        cli=YesNo(prompt='Do you wish to pick your cipher suite (default is SHA1-AES-CBC-OAEP-PSS-SHA3)? ')
+        cli=YesNo(prompt='Do you wish to use default cipher suite (SHA1-AES-CBC-OAEP-PSS-SHA3)? ')
         cl=cli.launch()
-        if not cl:
+        if cl:
             return get_cipher_methods("SHA2-AES-CBC-OAEP-PSS-SHA2")
         cli=SlidePrompt(
             [
@@ -142,7 +142,7 @@ class Client(object):
                 ),
                 Bullet(
                         prompt='Asymmetric signing hashing: ',
-                        choices=hash_types,
+                        choices=hash_types[1:],
                         align= 5, 
                         bullet="●",
                         bullet_color=colors.foreground["magenta"],

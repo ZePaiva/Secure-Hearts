@@ -136,6 +136,7 @@ class CC_API(object):
         return certs
 
     # sign data with citizen card 
+    # ERROR: should be mechanism CKM_SHA256_RSA_PKCS_PSS but it throws error
     def cc_sign(self, data, pin=None, cipher_method=Mechanism(CKM_SHA1_RSA_PKCS)):
         session=self.pkcs11.openSession(self.slot)
         try:
