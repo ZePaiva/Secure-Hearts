@@ -45,7 +45,7 @@ There is also present a script in src/client (`clear_clients.sh`) to delete the 
 of the keys and log directories.
 ```bash
 $ cd src/client
-$ chmod +x delete_accounts.sh
+$ chmod +x clear_clients.sh
 $ ./clear_clients.sh
 ```
 
