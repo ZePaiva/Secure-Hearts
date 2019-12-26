@@ -99,6 +99,7 @@ class CC_API(object):
                 issuer=cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
                 if 'EC de Autenticação do Cartão de Cidadão 00' in issuer:
                     return cert
+                session.closeSession()
         except Exception as e:
             session.closeSession()
             print(e)
