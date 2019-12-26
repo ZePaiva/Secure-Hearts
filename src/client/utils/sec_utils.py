@@ -1,160 +1,430 @@
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+import base64 import sys import os
+
+from cryptography.fernet import Fernet
+from cryptography.exceptions import *
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding, ec
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-import sys
-import os
+KEYS='../keys'
 
-def main():
-    print('Python cryptography utils functions:')
-    print('====================================')
-    print('Asymmetric ciphers utils:')
-    print('++++++++++++++++++++++++++++++++++++')
-    print(' -> load_key(path_to_key, password=None, private=True) => bytes')
-    print('    * path_to_key -> string')
-    print('    * password    -> string')
-    print('    * private     -> booleans')
-    print('------------------------------------')
-    print(' -> sign(message, priv_key, prehash=False) => bytes')
-    print('    * message  -> bytes')
-    print('    * priv_key -> bytes')
-    print('------------------------------------')
-    print(' -> verify(signature, message, pub_key) => boolean')
-    print('    * signature -> bytes')
-    print('    * message   -> bytes')
-    print('    * pub_key   -> bytes')
-    print('------------------------------------')
-    print(' -> asym_encrypt(message, pub_key) => bytes')
-    print('    * message   -> bytes')
-    print('    * pub_key   -> bytes')
-    print('------------------------------------')
-    print(' -> asym_decrypt(cipher, prv_key) => bytes')
-    print('    * cipher    -> bytes')
-    print('    * prv_key   -> bytes')
-    print('====================================')
-    print('Symmetric ciphers utils:')
-    print('++++++++++++++++++++++++++++++++++++')
-    print(' -> sym_encrypt(message, sec_key) => bytes')
-    print('    * message   -> bytes')
-    print('    * sec_key   -> bytes')
-    print('------------------------------------')
-    print(' -> sym_decrypt(message, sec_key) => bytes')
-    print('    * coded_msg -> bytes')
-    print('    * sec_key   -> bytes')
-    print('------------------------------------')
+######## SELECTORS ########
+# args:
+#   -> hashing: string
+# returns:
+#   -> hashes.METHOD
+def get_hash_alg(hashing):
+    hash_algs={
+        'MD5': hashes.MD5(),
+        'SHA2': hashes.SHA256(),
+        'SHA3': hashes.SHA3_256()
+    }
+    return hash_algs[hashing]
 
-def load_key(path_to_key, password=None, private=True):
-    try:
-        with open(path_to_key, 'rb') as kf:
-            if private:
-                key=serialization.load_pem_private_key(
-                    kf.read(),
-                    bytes(password, 'utf-8'),
-                    default_backend()
-                )
-    except:
-        print(error)
+# args:
+#   -> mode: string
+#   -> iv  : 16-byte integer
+# returns:
+#   -> modes.METHOD
+def get_sym_mode(mode, iv):
+    modes={
+        'CBC': modes.CBC(iv),
+        'CTR': modes.CTR(iv),
+        'OFB': modes.OFB(iv),
+        'CFB': modes.CFB(iv),
+        'CFB8': modes.CFB8(iv)
+    }
+    return modes[mode]
 
-def sign(message, priv_key):
-    signature=None
-    try:
-        signature=priv_key.sign(
-            message,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
+# args:
+#   -> mode     : string
+#   -> hash_alg : hashes.METHOD()
+# returns:
+#   -> padding.METHOD
+def get_padding_mode(mode, hash_alg):
+    paddings={
+        'OAEP': padding.OAEP(
+            mgf=padding.MGF1(algorithm=hash_alg),
+            algorithm=hash_alg,
+            label=None
+        ),
+        'PKCS1v15': padding.PKCS1v15(),
+        'PSS': padding.PSS(
+            mgf=padding.MGF1(hash_alg),
+            salt_length=padding.PSS.MAX_LENGTH
         )
-    except Exception as e:
-        print(e)
-        return e
+    }
+    return paddings[padding_mode]
 
-def verify(signature, message, pub_key):
-    try:
-        pub_key.verify(
-            signature,
-            message,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
+# args:
+#   -> algorithm: string
+#   -> key      : 128 | 192 | 256 bits
+# returns:
+#   -> algorithms.METHOD
+def get_cipher_alg(algorithm, key):
+    algs={
+        'AES': algorithms.AES(key),
+        'CAM': algorithms.Camellia(key)
+    }
+    return algs[algorithm]
+
+######## GENERATORS ########
+# returns:
+#   -> RSAPrivateKey
+def generate_rsa():
+    private_key=rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+    return private_key
+
+# args:
+#   -> key : bytes
+#   -> mode: string
+#   -> alg : string
+#   -> iv  : 16-byte integer (optional)
+# returns:
+#   -> SymmetricCipher
+def generate_sym_cipher(key, mode, alg, iv=None):
+    if not iv:
+        iv=os.urandom(16)
+    mode=get_sym_mode(mode, iv)
+    c_alg = get_cipher_alg(alg, key)
+    cipher = Cipher(
+        c_alg,
+        mode,
+        backend=default_backend()
+    )
+    return cipher, iv
+
+# args:
+#   -> passsword: bytes
+#   -> length   : integer
+#   -> hash_alg : string
+#   -> salt     : bytes
+# returns:
+#   -> bytes
+def generate_derived_key(password, hash_alg, salt=('sec_project_4_rec').encode('utf-8')):
+    hashing=get_hash_alg(hash_alg)
+    info=('handshake').encode('utf-8')
+    derivation=PBKDF2HMAC(
+        algorithm=hashing,
+        length=length,
+        salt=salt,
+        info=info,
+        backend=default_backend()
+    )
+    return derivation.derive(password)
+
+# args:
+#   -> data_2_digest: bytes
+#   -> hash_alg     : string
+# returns:
+#   -> bytes
+def generate_hash_digest(data_2_digest, hash_alg):
+    hashing=get_hash_alg(hash_alg)
+    digest=hashes.Hash(
+        hashing,
+        default_backend()
+    )
+    digest.update(data_2_digest)
+    return digest.finalize()
+
+# args:
+#   -> None
+# returns:
+#   -> EllipticCvePrivateKey
+def generate_dh():
+    key=ec.generate_private_key(
+        ec.SECP384R1(),
+        default_backend()
+    )
+    return key
+
+# args:
+#   -> private_key  : EllipticCurvePrivateKey
+#   -> peer_key     : EllipticCurvePublicKey
+#   -> private_salt : bytes
+#   -> peer_salt    : bytes
+#   -> length       : integer
+#   -> hash_alg     : string
+#   -> n_derivations: integer
+# returns:
+#   -> bytes
+def generate_key_dh(private_key, peer_key, 
+                    private_salt, peer_salt,
+                    length, hash_alg, n_derivations):
+    secret=private_key.exchange(
+        ec.ECDH(),
+        peer_key
+    )
+    key=secret
+    for i in range(0, number_of_derivations):
+        key=generate_derived_key(
+            key,
+            length,
+            hash_alg,
+            private_salt+peer_salt
         )
+    return key
+
+# args:
+#   -> key     : bytes
+#   -> hash_alg: string
+#   -> data    : bytes
+# returns:
+#   -> bytes
+def generate_mac(key, data, hash_alg='SHA2'):
+    hashing=get_hash_alg(hash_alg)
+    mac=hmac.HMAC(key, hashing, backend=default_backend())
+    mac.update(data)
+    return mac.finalize()
+
+######## FILE OPERS ########
+# args:
+#   -> key: RSAPrivateKey
+#   -> usr: integer
+# returns:
+#   -> None
+def write_private_key(key, usr)
+    with open(os.path.join(key, str(uid), '/prv_rsa'), 'wb') as file:
+        payload=key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption()
+        )
+        file.write(payload)
+
+# args:
+#   -> usr: integer
+# returns:
+#   -> RSAPrivateKey
+def write_public_key(key, usr)
+    with open(os.path.join(key, str(uid), '/prv_rsa'), 'rb') as file:
+        payload=serialization.load_pem_private_key(
+            file.read(),
+            password=None,
+            backend=default_backend()
+        )
+    return payload
+
+# args:
+#   -> key: RSAPrivateKey
+#   -> usr: integer
+# returns:
+#   -> None
+def write_public_key(key, usr)
+    with open(os.path.join(key, str(uid), '/pub_rsa'), 'wb') as file:
+        payload=key.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        file.write(payload)
+
+# args:
+#   -> usr: integer
+# returns:
+#   -> RSAPublicKey
+def write_public_key(key, usr)
+    with open(os.path.join(key, str(uid), '/pub_rsa'), 'rb') as file:
+        payload=serialization.load_pem_public_key(
+            file.read(),
+            backend=default_backend()
+        )
+    return payload
+
+######## ASYM MECHS ########
+# args:
+#   -> private_key : RSAPrivateKey
+#   -> data        : bytes
+#   -> hash_alg    : string (optional)
+#   -> padding_mode: string (optional)
+# returns:
+#   -> 64-byte signature
+def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
+    hashing=get_hash_alg(hash_alg)
+    padding=get_padding_mode(padding_mode)
+    sign=private_key.sign(data, padding, hashing)
+    return sign
+
+# args:
+#   -> public_key  : RSAPublicKey
+#   -> signature   : 64-byte signature
+#   -> data        : bytes
+#   -> hash_alg    : string (optional)
+#   -> padding_mode: string (optional)
+# returns:
+#   -> boolean
+def verify(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
+    hashing=get_hash_alg(hash_alg)
+    padding=get_padding_mode(padding_mode)
+    return public_key.verify(signature, data, padding, hashing)
+
+# args:
+#   -> public_key  : RSAPublicKey
+#   -> data        : bytes
+#   -> hash_alg    : string (optional)
+#   -> padding_mode: string (optional)
+# returns:
+#   -> bytes
+def asym_encrypt(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
+    hashing=get_hash_alg(hash_alg)
+    padding=get_padding_mode(padding_mode)
+    return public_key.encrypt(data, padding, hashing)
+
+# args:
+#   -> private_key : RSAPrivateKey
+#   -> data        : bytes
+#   -> hash_alg    : string (optional)
+#   -> padding_mode: string (optional)
+# returns:
+#   -> 64-byte signature
+def asym_decrypt(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
+    hashing=get_hash_alg(hash_alg)
+    padding=get_padding_mode(padding_mode)
+    return public_key.decrypt(data, padding, hashing)
+
+######## SYM MECHS ########
+# args:
+#   -> data : bytes
+#   -> key  : bytes  (optional)
+#   -> mode : string (optional)
+#   -> alg  : string (optional)
+#   -> iv   : 16-byte integer (optional)
+# returns:
+#   -> bytes
+#   -> bytes
+#   -> bytes
+def sym_encrypt(data, key=None, mode='CBC', alg='AES', iv=None):
+    if not key:
+        key=os.urandom(32)
+    cipher,iv=generate_sym_cipher(key, mode, alg, iv)
+    cryptor=cipher.encryptor()
+    ciphertext=cryptor.update(data)+encryptor.finalize()
+    return key, iv, ciphertext
+
+# args:
+#   -> data : bytes
+#   -> key  : bytes
+#   -> iv   : bytes
+#   -> mode : string (optional)
+#   -> alg  : string (optional)
+# returns:
+#   -> bytes
+def sym_decrypt(data, key, iv, mode='CBC', alg='AES'):
+    cipher,iv=generate_sym_cipher(key, mode, alg, iv)
+    cryptor=cipher.decryptor()
+    return cryptor.update(data)+encryptor.finalize()
+
+######## MAC ########
+# args:
+#   -> key      : bytes
+#   -> data     : bytes
+#   -> signature: bytes
+#   -> hash_alg : string
+def verify_mac(key, data, signature, hash_alg):
+    hashing=get_hash_alg(hash_alg)
+    mac = hmac.HMAC(key, hashing, backend=default_backend())
+    mac.update(payload)
+    try:
+        mac.verify(signature)
         return True
-    except cryptography.exceptions.InvalidSignature as e:
-        print(e)
+    except InvalidSignature:
         return False
-    except Exception as e:
-        print(e)
-        return e
 
-def asym_encrypt(message, pub_key):
-    ciphertext=None
-    try:
-        ciphertext=pub_key.encrypt(
-            message,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
-        return ciphertext
-    except Exception as e:
-        print(e)
-        return e
+######## FERNET ########
+# args:
+#   -> data: bytes
+#   -> key : base64-encoded-32-byte (optional)
+# returns:
+#   -> bytes
+#   -> bytes
+def fernet_encrypt(data, key=None):
+    if not key:
+        key=Fernet.generate_key()
+    cipher=Fernet(key)
+    return key, cipher.encrypt(data)
 
-def asym_decrypt(cipher, prv_key):
-    text=None
-    try:
-        text=prv_key.decrypt(
-            cipher,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
-        return text
-    except Exception as e:
-        print(e)
-        return e
+# args:
+#   -> key : base64-encoded-32-byte
+# returns:
+#   -> bytes
+def fernet_decrypt(key):
+    cipher=Fernet(key)
+    return cipher.decrypt(data)
 
-def sym_encript(message, sec_key):
-    try: 
-        iv = os.urandom(
-            algorithms.AES.block_size // 8
+######## SERIALIZERS ########
+# args:
+#   -> key : RSAPublicKey
+# returns:
+#   -> bytes
+def serialize_key(key):
+    return base64.b64encode(
+        key.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo
         )
-        cipher=Cipher(
-            algorithms.AES(sec_key),
-            modes.CBC(iv),
-            default_backend()
-        )
-        encryptor=cipher.encryptor()
-        padder=padding.PKCS7(algorithms.AES.block_size).padder()
-        coded_msg=encryptor.update(padder.update(message)+padder.finalize())
-        return coded_msg
-    except Exception as e:
-        print(e)
-        return e
+    ).decode('utf-8')
 
-def sym_decrypt(coded_msg, sec_key):
-    try:
-        iv = os.urandom(
-            algorithms.AES.block_size // 8
-        )
-        cipher=Cipher(
-            algorithms.AES(sec_key),
-            modes.CBC(iv),
-            default_backend()
-        )
-        decryptor=cipher.decryptor()
-        decryptor.update(coded_msg)+decryptor.finalize()
-    except Exception as e:
-        print (e)
-        return e
+# args:
+#   -> serialized_key : bytes
+# returns:
+#   -> RSAPublicKey
+def deserialize_key(serialized_key):
+    return serialization.load_pem_public_key(
+        base64.b64decode(
+            serialized_key.encode('utf-8')
+        ),
+        default_backend()
+    )
 
-if __name__=='__main__':
-    main()
+######## GETTERS ########
+# args:
+#   -> cipher_suite: string of struct:
+#       "[HASH_ALG]-[SYM_ALG]-[SYM_MODE]-[CIPHER_PADD]-[SIGN_PADD]-[SIGN_HASH]"
+# returns:
+#   -> dict of struct:
+#       {
+#           'hash': [HASH_ALG],
+#           'sym': {
+#               'key_size' : 128 if [HASH_ALG]=MD5 else 256
+#               'algorithm': [SYM_ALG]
+#               'mode'     : [SYM_MODE]
+#           },
+#           'asym': {
+#               'cipher_padd':[CIPHER_PADD],
+#               'sign': {
+#                   'padding': [SIGN_PADD],
+#                   'hashing': [SIGN_HASH]
+#               }
+#           },
+#       }
+# possible values:
+#   [HASH_ALG]    = MD5  | SHA2     | SHA3
+#   [SYM_ALG]     = AES  | CAM      | FERN
+#   [SYM_MODE]    = CBC  | CTR      | OFB  | CFB | CFB8 
+#   [CIPHER_PADD] = OAEP | PKCS1v15 | PSS
+#   [SIGN_PADD]   = OAEP | PKCS1v15 | PSS
+#   [SIGN_HASH]   = MD5  | SHA2     | SHA3
+def get_cipher_methods(cipher_suite):
+    methods=cipher_suite.split('-')
+    key=128 if methods[0]=='MD5' else 256
+    cipher_methods={
+        'hash': methods[0],
+        'sym': {
+            'key_size': key,
+            'algorithm': methods[1],
+            'mode': methods[2]
+        },
+        'asym': {
+            'cipher_padding': methods[3],
+            'sign': {
+                'padding': methods[4],
+                'hashing': methods[5]
+            }
+        }
+    }
+    return cipher_methods
