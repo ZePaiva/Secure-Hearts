@@ -34,7 +34,7 @@ class CC_API(object):
     def ask_pin(self):
         while True:
             session=self.pkcs11.openSession(self.slot)
-            cli=Password(prompt="Ctizen Card Pin: ", hidden="*")
+            cli=Password(prompt="Citizen Card Pin: ", hidden="*")
             usr_pin=cli.launch()
             try:
                 session.login(usr_pin)

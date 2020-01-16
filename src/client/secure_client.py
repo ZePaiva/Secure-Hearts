@@ -6,8 +6,8 @@ import time
 import traceback
 import socket
 import uuid
+import select
 from pprint import pprint
-from _thread import *
 
 # sec stuff
 from cc_api import CC_API
@@ -42,9 +42,8 @@ logging.basicConfig(filename='log/client_'+log_time+'.logs',
                             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
-cc_api=CC_API()
 
-class Client(object):
+class SecureClient(object):
     def __init__(self, host='0.0.0.0', port=8080, logLevel='ERROR'):
         # client stuff
         self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -52,11 +51,16 @@ class Client(object):
         self.username=''
         client_logger.setLevel(logLevel)
 
+        # server interaction
+        self.input_buffer=''
+        self.output_buffer=''
+
         # client security stuff
         self.uuid=None
         self.security=None
 
         # CC stuff
+        self.cc_api=None
         self.cc_on=False
         self.cc_cert=None
         self.cc_pin=None
@@ -68,18 +72,64 @@ class Client(object):
         # start player
         self.connect()
 
-    def send(self, payload, server_res=True):
-        pprint(payload)
-        data=json.dumps(payload)
-        while len(data):
-            self.sock.send(data[:BUFFER_SIZE].encode())
-            data=data[BUFFER_SIZE:]
-        if server_res:
-            try:
-                res=json.loads(self.sock(BUFFER_SIZE).decode())
-                return res
-            except Exception as e:
-                client_logger.exception('Unexpected error: '+str(e))
+    def close(self, error=None):
+        if error:
+            client_logger.warning("Client had unexpected error: %s", error)
+        client_logger.debug('Closing client...')
+        try:
+            self.sock.close()
+        except Exception as e:
+            client_logger.exception('Error closing socket')
+        client_logger.debug('Client deleted')
+        print('GOODBYE !!!')
+        exit(0)
+
+    def clear_socket_inputs(self):
+        payload=None
+        try:
+            payload=self.sock.recv(BUFFER_SIZE).decode()
+            client_logger.debug('Message: '+str(payload))
+        except:
+            client_logger.exception('Error cleaning client '+str(sock)+' input')
+            self.close(error='Error in input buffer, please check received messages')
+        if payload:
+            self.input_buffer+=payload
+            # handler
+        else:
+            # handler
+            pass
+
+    def clear_socket_outputs(self):
+        try:
+            payload=self.output_buffer[:BUFFER_SIZE]
+            client_logger.debug('Sending package '+str(payload)+' to '+str(self.sock))
+            bytes_sent=self.sock.send(payload.encode())
+            client_logger.debug('Message: '+str(self.output_buffer[:bytes_sent]))
+            self.output_buffer=self.output_buffer[bytes_sent:]
+        except Exception as e:
+            client_logger.exception('Error cleaning client '+str(self.sock)+' output')
+            self.close(error='Error in output buffer, please check sent messages')
+
+    # must check this link to understand (it's adapted from it)
+    # https://steelkiwi.com/blog/working-tcp-sockets/
+    def listen(self):
+        client_logger.info('Now listening')
+        while True:
+            inputs=[self.sock]
+            outputs=[]
+            # check if server has unanswered questions
+            if self.output_buffer:
+                outputs+=[self.sock]
+            readable, writable, exceptional = select.select(inputs, outputs, inputs, 1000)
+            client_logger.debug('Handling sockets inputs')
+            for sock in readable:
+                self.clear_socket_inputs()
+            client_logger.debug('Handling sockets outputs')
+            for sock in writable:
+                self.clear_socket_outputs()
+            client_logger.debug('Handling sockets with errors')
+            for sock in exceptional:
+                self.close()
 
     def pick_ciphers(self):
         hash_types=['MD5','SHA2','SHA3']
@@ -163,11 +213,9 @@ class Client(object):
         return get_cipher_methods(suite)
 
     def connect(self):
-        print('##########################')
-        print('#          LOGIN         #')
-        print('##########################')
-        print("#        INSERT CC       #")
-        print('##########################')
+        print('+------------------------+')
+        print('|       CONNECTING       |')
+        print('+------------------------+')
         cli=YesNo(prompt='Will you be using CC? ')
         self.cc_on=cli.launch()
         client_logger.debug('CC - '+str(self.cc_on))
@@ -180,6 +228,10 @@ class Client(object):
             self.username=cli.launch()
             client_logger.debug('username: '+str(self.username))
         else:
+            try:
+                self.cc_api=CC_API()
+            except Exception as e:
+                client_logger.warning('NO PT eID INSERTED')
             self.cc_cert=cc_api.get_pubKey_cert()
             client_logger.debug('cert: '+str(self.cc_cert))
             self.uuid=uuid.uuid1()
@@ -211,10 +263,6 @@ class Client(object):
                                              rsa_private_key, rsa_private_key.public_key(),
                                              cipher_methods, 
                                              log_time,
-                                             self.cc_on, cc_api, self.cc_pin,
+                                             self.cc_on, self.cc_api, self.cc_pin,
                                              )
-            first=self.send(self.security.secure_init_message(self.username))
-            print(first)
-
-client=Client(logLevel='DEBUG')
-
+            self.output_buffer+=json.dumps(self.security.secure_init_message(self.username))

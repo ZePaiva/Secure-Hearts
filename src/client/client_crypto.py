@@ -4,6 +4,7 @@ import logging
 import json
 
 from utils.sec_utils import *
+from utils.certificates_utils import *
 
 sec_logger=logging.getLogger('SECURITY')
 

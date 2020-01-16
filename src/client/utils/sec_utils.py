@@ -384,33 +384,6 @@ def deserialize_key(serialized_key):
         default_backend()
     )
 
-# args:
-#   -> cert: certificate
-# return:
-#   -> bytes
-def serialize_cert(cert):
-    if not cert:
-        return None
-    return base64.b64encode(
-        crypto.dump_certificate(
-            crypto.FILETYPE_PEM, cert
-        )
-    ).decode('utf-8')
-
-# args:
-#   -> cert: bytes
-# return:
-#   -> certificate
-def deserialize_cert(cert):
-    if not cert:
-        return None
-    return crypto.load_certificate(
-        crypto.FILETYPE_PEM,
-        base64.b64decode(
-            cert.encode('utf-8')
-        )
-    )
-
 ######## GETTERS ########
 # args:
 #   -> cipher_suite: string of struct:
