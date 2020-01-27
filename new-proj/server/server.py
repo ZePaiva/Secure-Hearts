@@ -21,20 +21,20 @@ level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;
 server_logger=logging.getLogger('SERVER')
 
 class Server:
-	def __init__(self, host='127.0.0.1', port=8080, log_level='DEBUG'):
+	def __init__(self, log_level='DEBUG'):
 		# logging
 		coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
+
+		# host and port for pre-game socket
+		self.host = '0.0.0.0' 
+		self.port = 8080
 
 		# server socket
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.sock.bind((host,port))
+		self.sock.bind((self.host, self.port))
 		self.sock.listen(16)
-
-        # host and port
-		self.host = host 
-		self.port = port
-
+		
 		# game related
 		self.clients = {}
 		self.croupier = Croupier()
@@ -130,6 +130,9 @@ class Server:
 					connections = success
 					for connection in connections:
 						self.require_action(connection, answer=operation, success=1, mode="in-game", table=payload["table"])
+						server_logger.info("Sent information about the starting of the game to " + self.croupier.get_username(connection))
+
+					server_logger.info("Game started at table " + payload["table"])
 
 			elif(operation == "player@request_leave_table"):
 				success = self.croupier.remove_player_table(payload, conn)

@@ -7,11 +7,13 @@ import socket
 import json
 import sys
 import traceback
-
 import time 
 
 # threading
 from _thread import *
+
+# keyboard
+import keyboard
 
 # player
 from player import *
@@ -211,7 +213,6 @@ class Client:
 										  players[player]["points"], 
 										  players[player]["status"]))
 
-
 	def player_not_in_table(self):
 		return self.player.table == None and self.player.in_table == False and self.player.owner == False and self.player.playing == False
 
@@ -268,6 +269,8 @@ class Client:
 
 	def menu_in_game(self):
 		print("Playing")
+
+
 
 client = Client()
 

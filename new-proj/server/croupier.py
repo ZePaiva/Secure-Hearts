@@ -54,9 +54,40 @@ class Croupier:
 		croupier_logger.warning("Player already exists")
 		return 0
 
+	def get_username(self, conn):
+		for username in self.players_conn.keys():
+			if(conn == self.players_conn[username]):
+				break
+		return username
 
 	def delete_player(self, conn):
 		if(conn in self.players.keys()):
+			try:
+				# delete table if player is owner
+				for table in self.tables.keys():
+					if(self.players_conn[self.tables[table]["owner"]] == conn):
+						croupier_logger.info("Player " + self.tables[table]["owner"] + " left and is the owner of table " + table)
+						request = {
+							"table":table,
+							"username":self.tables[table]["owner"],
+						}
+						self.delete_table(request, conn)
+					
+					else:
+						# remove player from table otherwise
+						for username in self.tables[table]["players"].keys():
+							if(self.players_conn[username] == conn):
+								croupier_logger.info("Player " + username + " left and is in a table")
+								request = {
+									"table":table,
+									"username":username
+								}
+								self.remove_player_table(request, conn)
+			except:
+				# exception: size of self.tables.keys() changed during iteration (because table was deleted)
+				# just ignore this exception in order to continue with the normal flow
+				pass
+
 			# delete player
 			del self.players[conn]
 
@@ -65,7 +96,6 @@ class Croupier:
 				if(conn == self.players_conn[username]):
 					del self.players_conn[username]
 					break
-
 
 			croupier_logger.info("Player " + str(username) + " deleted")
 			return 1
