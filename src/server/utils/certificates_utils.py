@@ -11,7 +11,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from OpenSSL import crypto
-from OpenSSL.crypto import load_certificate, load_crl, FILETYPE_ASN1, FILETYPE_PEM, Error, X509Store, X509StoreContext, X509StoreFlags, X509StoreContextError
+from OpenSSL.crypto import dump_certificate, load_certificate, load_crl, FILETYPE_ASN1, FILETYPE_PEM, Error, X509Store, X509StoreContext, X509StoreFlags, X509StoreContextError
 ######## CERTIFICATES STUFF ########
 # args:
 #   -> name: string
@@ -69,15 +69,15 @@ def serialize_cert(cert, c_type='PEM'):
         return None
     if c_type=='PEM':
         return base64.b64encode(
-            crypto.dump_certificate(
-                crypto.FILETYPE_PEM, 
+            dump_certificate(
+                FILETYPE_PEM, 
                 cert
             )
         ).decode('utf-8')
     else:
         return base64.b64encode(
-            crypto.dump_certificate(
-                crypto.FILETYPE_ASN1, 
+            dump_certificate(
+                FILETYPE_ASN1, 
                 cert
             )
         ).decode('utf-8')
@@ -91,15 +91,15 @@ def deserialize_cert(cert, c_type='PEM'):
     if not cert:
         return None
     if c_type=='PEM':
-        return crypto.load_certificate(
-            crypto.FILETYPE_PEM,
+        return load_certificate(
+            FILETYPE_PEM,
             base64.b64decode(
                 cert.encode('utf-8')
             )
         )
     else:
-        return crypto.load_certificate(
-            crypto.FILETYPE_ASN1,
+        return load_certificate(
+            FILETYPE_ASN1,
             base64.b64decode(
                 cert.encode('utf-8')
             )
@@ -142,21 +142,6 @@ def get_certificate_issuer(cert, c_type='PEM'):
         )
     id=certificate.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
     return id
-
-def get_cert_status_ocsp(cert, c_type='PEM'):
-    if c_type=='PEM':
-        certificate=load_pem_x509_certificate(
-            cert,
-            default_backend()
-        )
-    else:
-        certificate=load_der_x509_certificate(
-            cert,
-            default_backend()
-        )
-    extension=certificate.extensions.get_attributes_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)[0].value
-    print(extension) # assume it has already http imbued
-    # TBD
 
 # args:
 #   -> dir: string
@@ -231,15 +216,14 @@ def load_KeyStore(root_certificates, trusted_certificates, crl_list):
 #   -> list of X509Certificates
 #   -> list of X509Certificates
 #   -> list of X509CRL
-def load_certificates():
+def load_certificates(cert_dir, crl_dir):
     root_certificates=[] 
     trusted_certificates=[]
     crl_list=[]
-    dirname=["CCCerts/", "CCCRL/"]
     # load certificates
-    for filename in os.listdir(dirname[0]):
+    for filename in os.listdir(cert_dir):
         try:
-            cert_info = open(dirname[0]+filename, 'rb').read()
+            cert_info = open(os.path.join(cert_dir,filename), 'rb').read()
         except IOError:
             exit(10)
         else:
@@ -252,6 +236,7 @@ def load_certificates():
                     else:
                         certAuth=load_certificate(FILETYPE_ASN1, cert_info)
                 except Exception as e:
+                    print('err2')
                     exit(10)
                 else:
                     trusted_certificates=trusted_certificates+[certAuth]
@@ -263,15 +248,17 @@ def load_certificates():
                         root=load_certificate(FILETYPE_PEM, cert_info)
                     else:
                         root=load_certificate(FILETYPE_ASN1, cert_info)
-                except :
+                except:
+                    print('err3')
                     exit(10)
                 else:
                     root_certificates=root_certificates+[root]
     # load certificate revocation lists
-    for filename in os.listdir(dirname[1]):
+    for filename in os.listdir(crl_dir):
         try:
-            crl_info=open(dirname[1]+"/"+filename,'rb').read()
+            crl_info=open(os.path.join(crl_dir,filename),'rb').read()
         except IOError:
+            print('err4')
             exit(11)
         else:
             if ".crl" in filename:
@@ -284,10 +271,20 @@ def load_certificates():
 #   -> type: string      (optional)
 # returns:
 #   -> string
-def check_revoked_certificate(cert, c_type='PEM'):
-    issuer=get_certificate_issuer(cert, c_type=c_type)
-    # TBD
-
-
-######## CRL STUFF ########
-
+def verify_certificate_CoT(cert,store):
+    if cert is None:
+        return None
+    storecontext=None
+    try:
+        print('v1')
+        storecontext=X509StoreContext(store, cert).verify_certificate()
+    except X509StoreContextError as e:
+        print('v2')
+        print(e)
+        return False
+    if storecontext is None:
+        print('v3')
+        return True
+    else:
+        print('v4')
+        return False

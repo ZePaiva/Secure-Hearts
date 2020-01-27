@@ -97,6 +97,7 @@ class SecureClient(object):
             self.close(error='Error in input buffer, please check received messages')
         if payload:
             self.input_buffer+=payload
+            print(self.input_buffer)
             # handler
         else:
             # handler

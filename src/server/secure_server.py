@@ -29,7 +29,7 @@ server_logger=logging.getLogger('SERVER')
 BUFFER_SIZE=512*1024
 
 class SecureServer(object):
-    def __init__(self, host, port, logLevel):
+    def __init__(self, host, port, logLevel, tables=1):
         # logging
         coloredlogs.install(level=logLevel, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
 
@@ -38,7 +38,7 @@ class SecureServer(object):
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.setblocking(0)
         self.sock.bind((host,port))
-        self.sock.listen(4)
+        self.sock.listen(4*tables)
         server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
         server_logger.debug('server up')
 
@@ -140,12 +140,15 @@ class SecureServer(object):
         payload=self.clients[client_socket]['input_buffer']
         server_logger.debug(payload)
         payload=json.loads(payload)
+        response=''
         if payload['operation']=='player@sign_in':
             server_logger.debug('Executing player sign in')
-            self.crypto_actions.sign_in(self.clients[client_socket]['address'], payload)
+            new_client, response=self.crypto_actions.sign_in(self.clients[client_socket]['address'], payload)
+            if new_client:
+                self.clients[client_socket]['security']=new_client
+            self.clients[client_socket]['output_buffer']=self.crypto_actions.secure_package(json.dumps(response))
         else:
             pass
-        self.clients[client_socket]['input_buffer']=''
         server_logger.debug(self.clients[client_socket])
 
     def game_start(self):

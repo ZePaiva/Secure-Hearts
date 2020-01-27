@@ -28,6 +28,10 @@ log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;leve
 level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
 security_logger=logging.getLogger('SECURITY')
 
+DIR_PATH=os.path.dirname(os.path.realpath(__file__))
+KEYS=os.path.join(DIR_PATH, 'keys')
+CERTS=os.path.join(DIR_PATH, 'certs')
+
 # cryptography actions for the game
 class CryptographyServer(object):
     def __init__(self, logLevel='INFO'):
@@ -37,6 +41,16 @@ class CryptographyServer(object):
 
         # security
         self.sec_clients_dict={}
+        certs_dir=os.path.join(CERTS,'CCCerts')
+        crl_dir=os.path.join(CERTS,'CCCRL')
+        self.root_certificates, self.trusted_certificates, self.revoqued_lists=load_certificates(certs_dir, crl_dir)
+        self.keystore=load_KeyStore(self.root_certificates, self.trusted_certificates, self.revoqued_lists)
+        if not os.path.exists(os.path.join(KEYS, 'prv_key.rsa')):
+            self.private_key=generate_rsa()
+            write_private_key(os.path.join(KEYS,'prv_key.rsa'), self.private_key)
+        else:
+            self.private_key=read_private_key(os.path.join(KEYS, 'prv_key.rsa'))
+        self.public_key=self.private_key.public_key()
 
     # sign in of a user
     #   -> user can provide multiple ciphering methods
@@ -47,43 +61,65 @@ class CryptographyServer(object):
         security_logger.debug('Reached sign in to player '+str(player_addr))
         try:
             if not set({'message', 'operation','signature','cipher_suite', 'cc_user'}).issubset(set(payload_day_0.keys())):
-                return {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
+                return None, {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
             security_logger.debug('player_addr: '+str(player_addr))
             security_logger.debug('player_payload: '+str(payload_day_0))
+            # parse received args
             decoded_message=json.loads(
                 base64.b64decode(
                     payload_day_0['message'].encode('utf-8')
                 ).decode()
             )
+            if not set({'name','key','salt','derivations','certificate'}).issubset(set(decoded_message.keys())):
+                return None, {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
             cipher_methods=payload_day_0['cipher_suite']
             signature=base64.b64decode(
                 payload_day_0['signature'].encode()
             )
+            # picking method to check sign, depends if cc is on or not
             if payload_day_0['cc_user']:
                 certificate=deserialize_cert(decoded_message['certificate'])
                 publicKey=certificate.get_pubkey().to_cryptography_key()
                 security_logger.debug('Checking signature')
             else:
                 publicKey=deserialize_key(decoded_message['key'])
+            # check sign validity
             try:
                 valid_sign=verify(publicKey, signature, payload_day_0['message'].encode(), hash_alg=cipher_methods['asym']['sign']['hashing'], padding_mode=cipher_methods['asym']['sign']['padding'])
             except InvalidSignature:
                 security_logger.debug('Received invalid signature from '+str(player_addr))
-                return {'operation': 'ERROR', 'error': 'wrong signature'}
+                return None, {'operation': 'ERROR', 'error': 'wrong signature'}
             security_logger.debug('Signature valid, checking certificat CoT')
-           # self.sec_clients_dict.update({payload_day_0['uuid']: 
-           #                               {
-           #                                 'name': payload_day_0['name'],
-           #                                 'public_key': payload_day_0['key'],
-           #                                 'signature': payload_day_0['signature'],
-           #                                 'cipher_methods': payload_day_0['cipher_methods'],
-           #                                 'signature_method': payload_day_0['sig_method'],
-           #                                 'address': player_addr
-           #                               }})
-            security_logger.debug('payload: '+str(payload_day_0))
+            # check certificate validity - MISSING: OCSP check
+            if payload_day_0['cc_user']:
+                certificate=deserialize_cert(decoded_message['certificate'])
+                if certificate.has_expired():
+                    security_logger.warning('Received expired certificate')
+                    return None, {'operation': 'ERROR', 'error': 'expired certificate'}
+                if not verify_certificate_CoT(certificate, self.keystore):
+                    security_logger.warning('Received invalid certificate')
+                    return None, {'operation': 'ERROR', 'error': 'invalid certificate'}
+            security_logger.debug('all is well in the certificate and signature')
+            # create client (it's a dict)
+            client={
+                'username':decoded_message['name'],
+                'certificate':deserialize_cert(decoded_message['certificate']),
+                'public_key':deserialize_key(decoded_message['key']),
+                'derivations':decoded_message['derivations'],
+                'salt':base64.b64decode(decoded_message['salt'].encode()),
+                'cipher_methods':payload_day_0['cipher_suite'],
+                'cc_user':payload_day_0['cc_user']
+            }
+            security_logger.info('new client validated, ready to accept')
+            self.sec_clients_dict.update({player_addr: client})
+            return client, {'operation': 'sign_in', 'status': 'success'} 
         except Exception as e:
             security_logger.exception('Exception '+str(e)+' @ player_sign_in')
-        pass
+        return None, None
+
+    # secures json packages(messages)
+    def secure_package(self, message):
+        return message
 
     # start card distribution
     #   -> create deck and server-side signature
