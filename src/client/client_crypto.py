@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.serialization import Encoding
 sec_logger=logging.getLogger('SECURITY')
 
 class CryptographyClient(object):
-    def __init__(self, uuid, prv_key, pub_key, cipher_methods, log_time, cc_on, cc=None, cc_session=None, cc_pin=None):
+    def __init__(self, uuid, prv_key, pub_key, cipher_methods, log_time, cc_on, cert=None, cc=None):
         # logging basic stuff
         logging.basicConfig(filename='log/client_'+log_time+'.logs',
                                     filemode='a',
@@ -25,15 +25,12 @@ class CryptographyClient(object):
 
         # cc stuff
         self.cc_on=cc_on
-        self.cc_pin=cc_pin
         if self.cc_on:
             self.cc=cc
             self.cc_cert=self.cc.get_pubKey_cert()
-            self.cc_session=cc_session
         else:
             self.cc=None
-            self.cc_cert=None
-            self.cc_session=None
+            self.cc_cert=cert
 
         # security stuff
         self.private_value=None     # ephemeral private key
@@ -50,7 +47,7 @@ class CryptographyClient(object):
     #   'operation': 'player@sign_in',
     #   'message': decoded-base64-encoded-message json,
     #   'signature': signature to verify authenticity,
-    #   'certificate': to verify chain of trust
+    #   'cipher_suite': cipher methods
     # }
     def secure_init_message(self, username):
         # generate ephemeral keys
@@ -75,14 +72,11 @@ class CryptographyClient(object):
                 }
             ).encode('utf-8')
         )
+        sec_logger.debug("message:\n"+str(prep))
         # signing it
         sec_logger.debug('signing first message')
         if self.cc_on:
-            if self.cc_pin:
-                signature=base64.b64encode(self.cc.cc_sign(prep, session=self.cc_session, pin=self.cc_pin)).decode('utf-8')
-            else:
-                pin, session=self.cc.ask_pin()
-                signature=base64.b64encode(self.cc.cc_sign(prep, session=session, pin=pin)).decode('utf-8')
+                signature=base64.b64encode(self.cc.cc_sign(prep)).decode('utf-8')
         else:
             signature=base64.b64encode(
                 sign(

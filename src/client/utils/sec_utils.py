@@ -186,10 +186,9 @@ def generate_mac(key, data, hash_alg='SHA2'):
 # args:
 #   -> path: string
 #   -> key : RSAPrivateKey
-#   -> usr : integer
 # returns:
 #   -> None
-def write_private_key(path, key, usr):
+def write_private_key(path, key):
     with open(os.path.join(path, 'prv_rsa'), 'wb') as file:
         payload=key.private_bytes(
             serialization.Encoding.PEM,
@@ -200,10 +199,9 @@ def write_private_key(path, key, usr):
 
 # args:
 #   -> path: string
-#   -> usr: integer
 # returns:
 #   -> RSAPrivateKey
-def read_private_key(path, key, usr):
+def read_private_key(path):
     with open(os.path.join(path, 'prv_rsa'), 'rb') as file:
         payload=serialization.load_pem_private_key(
             file.read(),
@@ -215,10 +213,9 @@ def read_private_key(path, key, usr):
 # args:
 #   -> path: string
 #   -> key: RSAPrivateKey
-#   -> usr: integer
 # returns:
 #   -> None
-def write_public_key(path, key, usr):
+def write_public_key(path, key):
     with open(os.path.join(path, 'pub_rsa'), 'wb') as file:
         payload=key.public_bytes(
             serialization.Encoding.PEM,
@@ -228,10 +225,9 @@ def write_public_key(path, key, usr):
 
 # args:
 #   -> path: string
-#   -> usr: integer
 # returns:
 #   -> RSAPublicKey
-def read_public_key(path, key, usr):
+def read_public_key(path):
     with open(os.path.join(path, 'pub_rsa'), 'rb') as file:
         payload=serialization.load_pem_public_key(
             file.read(),

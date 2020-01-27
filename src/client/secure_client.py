@@ -14,6 +14,7 @@ from termcolor import colored
 from cc_api import CC_API
 from client_crypto import CryptographyClient
 from utils.sec_utils import *
+from utils.certificates_utils import *
 from cryptography.hazmat.primitives import hashes
 
 # game stuff
@@ -223,12 +224,15 @@ class SecureClient(object):
         client_logger.debug('CC - '+str(self.cc_on))
 
         if not self.cc_on:
-            client_logger.debug('no cert')
+            self.cc_api=None
+            client_logger.debug('no cc')
             self.uuid=uuid.uuid1()
             client_logger.debug('uuid: '+str(self.uuid))
             cli=Input('Username: ')
             self.username=cli.launch()
             client_logger.debug('username: '+str(self.username))
+            self.cc_cert=generate_certificate(self.username)[0]
+            client_logger.debug('cert: '+str(self.cc_cert))
         else:
             #try:
                 client_logger.debug('cc api DOWN')
@@ -242,34 +246,34 @@ class SecureClient(object):
                 client_logger.debug('username: '+str(self.username))
                 self.cc_num=self.cc_api.get_citizen_card_info()['serialnumber']
                 client_logger.debug('CC ID: '+str(self.cc_num))
-                cli=YesNo(prompt='Save CC pin for later? ')
-                if cli.launch():
-                    self.cc_pin, self.cc_session=self.cc_api.ask_pin(to_cache=True)
             #except Exception as e:
             #    client_logger.warning('NO PT eID INSERTED')
             #    print(colored("NO PT eID INSERTED", 'red'))
-            #    print(e)
-            #    print(e.traceback())
+            #    client_logger.exception(e)
+
+        # pick sec_spec
+        cipher_methods=self.pick_ciphers()
+        client_logger.debug('cipher_methods: '+str(cipher_methods))
 
         # creating keys and user specs
         keys_dir= os.path.join(KEYS_PATH,str(self.uuid))
         if not os.path.exists(keys_dir):
-            # pick sec_spec
-            cipher_methods=self.pick_ciphers()
-            client_logger.debug('cipher_methods: '+str(cipher_methods))
             # handling creation and storage of keys
             os.makedirs(keys_dir)
             rsa_private_key=generate_rsa()
-            write_private_key(keys_dir, rsa_private_key, self.uuid)
+            write_private_key(keys_dir, rsa_private_key)
             client_logger.debug('stored private key @ '+keys_dir)
-            write_public_key(keys_dir, rsa_private_key.public_key(), self.uuid)
+            write_public_key(keys_dir, rsa_private_key.public_key())
             client_logger.debug('stored public key @ '+keys_dir)
+        else:
+            rsa_private_key=read_private_key(keys_dir)
+            client_logger.debug('loaded private key from '+keys_dir)
 
-            # create secure client
-            self.security=CryptographyClient(self.uuid, 
-                                             rsa_private_key, rsa_private_key.public_key(),
-                                             cipher_methods, 
-                                             log_time,
-                                             self.cc_on, self.cc_api, self.cc_session, self.cc_pin
-                                             )
-            self.output_buffer+=json.dumps(self.security.secure_init_message(self.username))
+        # create secure client
+        self.security=CryptographyClient(self.uuid, 
+                                         rsa_private_key, rsa_private_key.public_key(),
+                                         cipher_methods, 
+                                         log_time,
+                                         self.cc_on, self.cc_cert, self.cc_api
+                                         )
+        self.output_buffer+=json.dumps(self.security.secure_init_message(self.username))

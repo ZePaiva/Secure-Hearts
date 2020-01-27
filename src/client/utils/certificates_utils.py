@@ -1,6 +1,9 @@
+# utils
 import os
 import base64
+import datetime
 
+# crypto modules
 from cryptography import x509
 from cryptography.x509 import *
 from cryptography.x509.oid import NameOID
@@ -8,6 +11,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from OpenSSL import crypto
+from OpenSSL.crypto import load_certificate, load_crl, FILETYPE_ASN1, FILETYPE_PEM, Error, X509Store, X509StoreContext, X509StoreFlags, X509StoreContextError
 ######## CERTIFICATES STUFF ########
 # args:
 #   -> name: string
@@ -20,7 +24,7 @@ def generate_certificate(name):
         public_exponent=65537, 
         key_size=2048)
     public_key = priv_key.public_key()
-    pem = priv_key.private_bytes(
+    cert_private = priv_key.private_bytes(
         encoding=serialization.Encoding.PEM, 
         format=serialization.PrivateFormat.TraditionalOpenSSL, 
         encryption_algorithm=serialization.NoEncryption())
@@ -31,7 +35,7 @@ def generate_certificate(name):
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, u'My Company'),
         x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])
-    cert = x509.CertificateBuilder(
+    cert_private = x509.CertificateBuilder(
     ).subject_name(
         subject
     ).issuer_name(
@@ -53,7 +57,7 @@ def generate_certificate(name):
         default_backend()
     )
 
-    return pem, cert.public_bytes(serialization.Encoding.PEM)
+    return cert_private, cert_private.public_bytes(serialization.Encoding.PEM)
 
 # args:
 #   -> cert: certificate
@@ -195,6 +199,85 @@ def import_certficates(dir):
         if id not in certs:
             certs[id]={'cert': cert, 'path': path, 'type': c_type}
         return certs
+
+# args:
+#   -> root_certificates: list of X509Certificates
+#   -> trusted_certificates: list of X509Certificates
+#   -> crl_list: list of CRL 
+# returns:
+#   -> X509Store
+def load_KeyStore(root_certificates, trusted_certificates, crl_list):
+    try:
+        store=X509Store()
+        i=0
+        for root in root_certificates:
+            store.add_cert(root)
+            i+=1
+        i=0
+        for trusted in trusted_certificates:
+            store.add_cert(trusted)
+            i+=1
+        i=0
+        for crl in crl_list:
+            store.add_crl(crl)
+            i+=1
+        store.set_flags(X509StoreFlags.CRL_CHECK | X509StoreFlags.IGNORE_CRITICAL)
+    except X509StoreContext:
+        return None
+    else:
+        return store
+
+# returns:
+#   -> list of X509Certificates
+#   -> list of X509Certificates
+#   -> list of X509CRL
+def load_certificates():
+    root_certificates=[] 
+    trusted_certificates=[]
+    crl_list=[]
+    dirname=["CCCerts/", "CCCRL/"]
+    # load certificates
+    for filename in os.listdir(dirname[0]):
+        try:
+            cert_info = open(dirname[0]+filename, 'rb').read()
+        except IOError:
+            exit(10)
+        else:
+            if ".cer" in filename:
+                try:
+                    if "0012" in filename or "0013" in filename or "0015" in filename:
+                        certAuth=load_certificate(FILETYPE_PEM, cert_info)
+                    elif "Raiz" in filename:
+                        root=load_certificate(FILETYPE_ASN1,cert_info)
+                    else:
+                        certAuth=load_certificate(FILETYPE_ASN1, cert_info)
+                except Exception as e:
+                    exit(10)
+                else:
+                    trusted_certificates=trusted_certificates+[certAuth]
+            elif ".crt" in filename:
+                try:
+                    if "ca_ecc" in filename:
+                        root=load_certificate(FILETYPE_PEM, cert_info)
+                    elif "-self" in filename:
+                        root=load_certificate(FILETYPE_PEM, cert_info)
+                    else:
+                        root=load_certificate(FILETYPE_ASN1, cert_info)
+                except :
+                    exit(10)
+                else:
+                    root_certificates=root_certificates+[root]
+    # load certificate revocation lists
+    for filename in os.listdir(dirname[1]):
+        try:
+            crl_info=open(dirname[1]+"/"+filename,'rb').read()
+        except IOError:
+            exit(11)
+        else:
+            if ".crl" in filename:
+                crls=load_crl(FILETYPE_ASN1, crl_info)
+        crl_list=crl_list+[crls]
+    return root_certificates, trusted_certificates, crl_list
 
 # args:
 #   -> cert: x509 PEM Certificate
