@@ -114,3 +114,10 @@ class Player:
 		conn.send(payload.encode())
 		player_logger.info("Requested usernames of online players")
 
+
+	def request_leave_croupier(self, conn):
+		payload = {
+			"operation":"player@request_leave_croupier",
+			"username":self.username
+		}
+

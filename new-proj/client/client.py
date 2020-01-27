@@ -76,109 +76,104 @@ class Client:
 		self.register_player()
 
 		while 1:
-			data = self.sock.recv(1024)
-			if not data:
-				break
+			try:
+				data = self.sock.recv(1024)
+				if not data:
+					break
 
-			debugged = self.debug_data(data)
-			for d in debugged:
-				payload = json.loads(d)
-				operation = payload["operation"]
-
-				if(operation == "server@require_action"):
-					if(payload["answer"] == "player@request_create_table"):
-						if(payload["success"]):
-							self.player.owner = True
-							self.player.in_table = True
-							self.player.table = payload["table"]
-							self.player.playing = False
-							client_logger.info("Player created table " + payload["table"] + " with success")
-						else:
-							client_logger.warning("Player didn't create table " + payload["table"])
-
-						if not self.player.playing:
-							self.menu_pre_game()
-						else:
-							self.menu_in_game()
-
-					elif(payload["answer"] == "client@register_player"):
-						self.menu_pre_game()
-						client_logger.info("Player registered")
-
-					elif(payload["answer"] == "player@request_delete_table"):
-						if(payload["success"]):
-							self.player.owner = False
-							self.player.in_table = False
-							self.player.playing = False
-							self.player.table = payload["table"]
-							client_logger.info("Player deleted the table with success")
-						else:
-							client_logger.warning("Player didn't delete the table " + payload["table"])
-						
-						if not self.player.playing:
-							self.menu_pre_game()
-						else:
-							self.menu_in_game()
-						
-					elif(payload["answer"] == "player@request_leave_table"):
-						if(payload["success"]):
-							self.player.in_table = False
-							self.player.table = payload["table"]
-							self.player.playing = False
-							self.player.owner = False
-							client_logger.info("Player left the table with success")
-						else:
-							client_logger.warning("Player didn't leave the table")
-
-						if not self.player.playing:
-							self.menu_pre_game()
-						else:
-							self.menu_in_game()
-
-					elif(payload["answer"] == "player@request_join_table"):
-						if(payload["success"]):
-							self.player.in_table = True
-							self.player.table = payload["table"]
-							self.player.owner = False
-							client_logger.info("Player joined table " + payload["table"] + " with success")
-
-							if(payload["mode"] == "in-game"):
-								self.player.playing = True
-								client_logger.info("Player started playing Hearts at table " + self.player.table)
-						else:
-							client_logger.warning("Player didn't join the table")
-
-						if not self.player.playing:
-							self.menu_pre_game()
-						else:
-							self.menu_in_game()
-				
-				elif(operation == "croupier@send_online_players"):
-					self.display_online_users(payload)
-					if not self.player.playing:
-						self.menu_pre_game()
-					else:
-						self.menu_in_game()
-
-				elif(operation == "croupier@send_online_tables"): 
-					self.display_online_tables(payload)
-					if not self.player.playing:
-						self.menu_pre_game()
-					else:
-						self.menu_in_game()
-
-				elif(operation == "croupier@table_deleted"): # inform that the table you were in was deleted
-					self.player.owner = False
-					self.player.in_table = False
-					self.player.table = None
-					self.player.playing = False
-					client_logger.warning("The table you were in was deleted. You may now join a new table")
+				debugged = self.debug_data(data)
+				for d in debugged:
+					payload = json.loads(d)
+					operation = payload["operation"]
 					
+					if(operation == "server@require_action"):
+						if(payload["answer"] == "player@request_create_table"):
+							if(payload["success"]):
+								self.player.owner = True
+								self.player.in_table = True
+								self.player.table = payload["table"]
+								self.player.playing = False
+								client_logger.info("Player created table " + payload["table"] + " with success")
+								client_logger.info("Player is now waiting for table to be ready... ({}/4)".format(payload["nplayers"]))
+								client_logger.warning("To leave table, please press CTRL-C")
+							else:
+								client_logger.warning("Player didn't create table " + payload["table"])
+								self.menu_pre_game()
 
+						elif(payload["answer"] == "client@register_player"):
+							client_logger.info("Player registered")
+							self.menu_pre_game()
 
+						elif(payload["answer"] == "player@request_delete_table"):
+							if(payload["success"]):
+								self.player.owner = False
+								self.player.in_table = False
+								self.player.playing = False
+								self.player.table = payload["table"]
+								client_logger.info("Player deleted the table with success")
+							else:
+								client_logger.warning("Player didn't delete the table " + payload["table"])
+
+							self.menu_pre_game()
+
+						elif(payload["answer"] == "player@request_leave_table"):
+							if(payload["success"]):
+								self.player.in_table = False
+								self.player.table = payload["table"]
+								self.player.playing = False
+								self.player.owner = False
+								client_logger.info("Player left the table with success")
+							else:
+								client_logger.warning("Player didn't leave the table")
+
+							self.menu_pre_game()
+
+						elif(payload["answer"] == "player@request_join_table"):
+							if(payload["success"]):
+								self.player.in_table = True
+								self.player.table = payload["table"]
+								self.player.owner = False
+								client_logger.info("Player joined table " + payload["table"] + " with success")
+								client_logger.info("Player is now waiting for table to be ready...({}/4)".format(payload["nplayers"]))
+								client_logger.warning("To leave table, please press CTRL-C")
+							else:
+								client_logger.warning("Player didn't join the table")
+								self.menu_pre_game()
+
+						elif(payload["answer"] == "player@game_start"):
+							self.player.playing = True
+							client_logger.warning("Game started!")
+
+					
+					elif(operation == "croupier@send_online_players"):
+						self.display_online_users(payload)
+						self.menu_pre_game()
+
+					elif(operation == "croupier@send_online_tables"): 
+						self.display_online_tables(payload)
+						self.menu_pre_game()
+
+					elif(operation == "croupier@table_deleted"): # inform that the table you were in was deleted
+						self.player.owner = False
+						self.player.in_table = False
+						self.player.table = None
+						self.player.playing = False
+						client_logger.warning("The table you were in was deleted. You may now join a new table")
+						self.menu_pre_game()
+				
+			except KeyboardInterrupt:
+				if(self.player.in_table):
+					self.player.request_leave_table(self.player.table, self.sock)
+				else:
+					break
+
+		print()
 		client_logger.info("Disconnected")
-		self.sock.close()
-		sys.exit(0)
+		self.player.request_leave_croupier(self.sock)
+		client_logger.info("Player requested leaving croupier. Goodbye!")
+
+
+		# self.sock.close()
 
 
 	def run(self):
@@ -188,6 +183,8 @@ class Client:
 		except:
 			traceback.print_exc()
 			sys.exit(1)
+
+
 
 
 	def display_online_tables(self, payload):

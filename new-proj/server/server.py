@@ -63,25 +63,35 @@ class Server:
 
 		return connection  
 
-	def require_action(self, conn, answer="", success=1, mode="pre-game", table=None):
+	def require_action(self, conn, answer="", success=1, mode="pre-game", table=None, nplayers=-1):
 		payload = {
 			"operation":"server@require_action",
 			"answer":answer,
 			"success":success,
 			"mode":mode,
-			"table":table
+			"table":table,
+			"nplayers":nplayers
 		}
 
 		payload = json.dumps(payload)
 		conn.send(payload.encode())
 
+
+	def delete_client(self, conn):
+		self.croupier.delete_player(conn)
+		conn.close()
+		server_logger.info("Disconnected " + self.clients[conn]["username"])
+
 	def communication_thread(self, conn, addr):
 		while 1:
-			data = conn.recv(1024).decode()
+			try:
+				data = conn.recv(1024).decode()
+			except ConnectionResetError:
+				self.delete_client(conn)
+				break
+
 			if not data:
-				self.croupier.delete_player(conn)
-				conn.close()
-				server_logger.info("Disconnected " + self.clients[conn]["username"])
+				self.delete_client(conn)
 				break
 			
 			payload = json.loads(data)
@@ -106,7 +116,8 @@ class Server:
 				success = self.croupier.create_table(payload, conn)
 
 				if success:
-					self.require_action(conn, answer=operation, success=success, table=payload["table"])
+					nplayers = self.croupier.tables[payload["table"]]["nplayers"]
+					self.require_action(conn, answer=operation, success=success, table=payload["table"], nplayers=nplayers)
 				else:
 					self.require_action(conn, answer=operation, success=success, table=None)
 
@@ -125,11 +136,13 @@ class Server:
 				if(success == 0):
 					self.require_action(conn, answer=operation, success=success, table=None) 
 				elif(success == 1):
-					self.require_action(conn, answer=operation, success=success, table=payload["table"]) 
+					nplayers = self.croupier.tables[payload["table"]]["nplayers"]
+					self.require_action(conn, answer=operation, success=success, table=payload["table"], nplayers=nplayers) 
 				else:
 					connections = success
+					nplayers = self.croupier.tables[payload["table"]]["nplayers"]
 					for connection in connections:
-						self.require_action(connection, answer=operation, success=1, mode="in-game", table=payload["table"])
+						self.require_action(connection, answer="player@game_start", success=1, mode="in-game", table=payload["table"], nplayers=nplayers)
 						server_logger.info("Sent information about the starting of the game to " + self.croupier.get_username(connection))
 
 					server_logger.info("Game started at table " + payload["table"])
@@ -142,11 +155,21 @@ class Server:
 				else:
 					self.require_action(conn, answer=operation, success=success, table=payload["table"])
 
+			elif(operation == "player@request_leave_croupier"):
+				self.delete_client(conn)
+				break
+
+
+
 
 	def run(self):
 		try:
 			while 1:
-				conn, addr = self.accept_client()
+				try:
+					conn, addr = self.accept_client()
+				except KeyboardInterrupt:
+					server_logger.info("Server shutdown")
+					break
 				start_new_thread(self.communication_thread,(conn, addr, ))
 		except:
 			traceback.print_exc()
