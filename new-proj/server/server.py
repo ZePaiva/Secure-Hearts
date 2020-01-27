@@ -1,0 +1,155 @@
+# logging
+import logging
+import coloredlogs
+
+# server
+import socket
+import json
+import sys
+import traceback
+
+# threading
+from _thread import *
+
+# croupier
+from croupier import Croupier
+
+
+# server logging
+server_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
+level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
+server_logger=logging.getLogger('SERVER')
+
+class Server:
+	def __init__(self, host='127.0.0.1', port=8080, log_level='DEBUG'):
+		# logging
+		coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
+
+		# server socket
+		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		self.sock.bind((host,port))
+		self.sock.listen(16)
+
+        # host and port
+		self.host = host 
+		self.port = port
+
+		# game related
+		self.clients = {}
+		self.croupier = Croupier()
+
+	def accept_client(self):
+		try:
+			conn, addr = self.sock.accept()
+			self.clients[conn] = {
+				"address":addr,
+				"conn":conn,
+				"ECDH private":"",
+				"ECDH public":"",
+				"RSA private":"",
+				"RSA public":""
+			}
+			server_logger.info("Client " + str(conn) + " accepted.")
+			return conn, addr
+		except Exception as e:
+			traceback.print_exc()
+			sys.exit(1)
+
+	def get_conn_from_username(self, username):
+		for connection in self.clients.keys():
+			if(self.clients[connection]["username"] == username):
+				break
+
+		return connection  
+
+	def require_action(self, conn, answer="", success=1, mode="pre-game", table=None):
+		payload = {
+			"operation":"server@require_action",
+			"answer":answer,
+			"success":success,
+			"mode":mode,
+			"table":table
+		}
+
+		payload = json.dumps(payload)
+		conn.send(payload.encode())
+
+	def communication_thread(self, conn, addr):
+		while 1:
+			data = conn.recv(1024).decode()
+			if not data:
+				self.croupier.delete_player(conn)
+				conn.close()
+				server_logger.info("Disconnected " + self.clients[conn]["username"])
+				break
+			
+			payload = json.loads(data)
+			operation = payload["operation"]
+			
+			if(operation == "client@register_player"):
+				username = payload["username"]
+				self.clients[conn]["username"] = username
+				self.croupier.add_player(conn, addr, username)
+				server_logger.info("Player " + username + " joined the server")
+
+				self.require_action(conn, answer=operation)
+				server_logger.info("Sent a message to " + username + " to require an action")
+
+			elif(operation == "player@request_online_users"):
+				self.croupier.send_online_players(conn)
+
+			elif(operation == "player@request_tables_online"):
+				self.croupier.send_online_tables(conn)
+
+			elif(operation == "player@request_create_table"):
+				success = self.croupier.create_table(payload, conn)
+
+				if success:
+					self.require_action(conn, answer=operation, success=success, table=payload["table"])
+				else:
+					self.require_action(conn, answer=operation, success=success, table=None)
+
+
+			elif(operation == "player@request_delete_table"):
+				success = self.croupier.delete_table(payload, conn)
+				
+				if success:
+					self.require_action(conn, answer=operation, success=success, table=None)
+				else:
+					self.require_action(conn, answer=operation, success=success, table=payload["table"])
+
+			elif(operation == "player@request_join_table"):
+				success = self.croupier.join_player_table(payload, conn)
+
+				if(success == 0):
+					self.require_action(conn, answer=operation, success=success, table=None) 
+				elif(success == 1):
+					self.require_action(conn, answer=operation, success=success, table=payload["table"]) 
+				else:
+					connections = success
+					for connection in connections:
+						self.require_action(connection, answer=operation, success=1, mode="in-game", table=payload["table"])
+
+			elif(operation == "player@request_leave_table"):
+				success = self.croupier.remove_player_table(payload, conn)
+
+				if success:
+					self.require_action(conn, answer=operation, success=success, table=None)
+				else:
+					self.require_action(conn, answer=operation, success=success, table=payload["table"])
+
+
+	def run(self):
+		try:
+			while 1:
+				conn, addr = self.accept_client()
+				start_new_thread(self.communication_thread,(conn, addr, ))
+		except:
+			traceback.print_exc()
+			sys.exit(1)
+
+server = Server()
+server_logger.info("Waiting for clients...")
+
+server.run()
