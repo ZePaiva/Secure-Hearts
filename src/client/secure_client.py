@@ -8,6 +8,7 @@ import socket
 import uuid
 import select
 from pprint import pprint
+from termcolor import colored
 
 # sec stuff
 from cc_api import CC_API
@@ -65,6 +66,7 @@ class SecureClient(object):
         self.cc_cert=None
         self.cc_pin=None
         self.cc_num=None
+        self.cc_session=None
 
         # Game stuff
         self.player = Player()
@@ -136,7 +138,7 @@ class SecureClient(object):
         sym_alg_types=['AES','CAM','FER']
         sym_mode_types=['CBC','CTR','OFB','CFB','CFB8']
         padd_types=['OAEP','PKCS1v15','PSS']
-        cli=YesNo(prompt='Do you wish to use default cipher suite (SHA1-AES-CBC-OAEP-PSS-SHA3)? ')
+        cli=YesNo(prompt='Do you wish to use default cipher suite (SHA2-AES-CBC-OAEP-PSS-SHA2)? ')
         cl=cli.launch()
         if cl:
             return get_cipher_methods("SHA2-AES-CBC-OAEP-PSS-SHA2")
@@ -228,21 +230,26 @@ class SecureClient(object):
             self.username=cli.launch()
             client_logger.debug('username: '+str(self.username))
         else:
-            try:
+            #try:
+                client_logger.debug('cc api DOWN')
                 self.cc_api=CC_API()
-            except Exception as e:
-                client_logger.warning('NO PT eID INSERTED')
-            self.cc_cert=cc_api.get_pubKey_cert()
-            client_logger.debug('cert: '+str(self.cc_cert))
-            self.uuid=uuid.uuid1()
-            client_logger.debug('uuid: '+str(self.uuid))
-            self.username=cc_api.get_citizen_card_info()['name']
-            client_logger.debug('username: '+str(self.username))
-            self.cc_num=cc_api.get_citizen_card_info()['serialnumber']
-            client_logger.debug('CC ID: '+str(self.cc_num))
-            cli=YesNo(prompt='Save CC pin for later? ')
-            if cli.launch():
-                self.cc_pin=cc_api.ask_pin()
+                client_logger.debug('cc api UP')
+                self.cc_cert=self.cc_api.get_pubKey_cert()
+                client_logger.debug('cert: '+str(self.cc_cert))
+                self.uuid=uuid.uuid1()
+                client_logger.debug('uuid: '+str(self.uuid))
+                self.username=self.cc_api.get_citizen_card_info()['name']
+                client_logger.debug('username: '+str(self.username))
+                self.cc_num=self.cc_api.get_citizen_card_info()['serialnumber']
+                client_logger.debug('CC ID: '+str(self.cc_num))
+                cli=YesNo(prompt='Save CC pin for later? ')
+                if cli.launch():
+                    self.cc_pin, self.cc_session=self.cc_api.ask_pin(to_cache=True)
+            #except Exception as e:
+            #    client_logger.warning('NO PT eID INSERTED')
+            #    print(colored("NO PT eID INSERTED", 'red'))
+            #    print(e)
+            #    print(e.traceback())
 
         # creating keys and user specs
         keys_dir= os.path.join(KEYS_PATH,str(self.uuid))
@@ -263,6 +270,6 @@ class SecureClient(object):
                                              rsa_private_key, rsa_private_key.public_key(),
                                              cipher_methods, 
                                              log_time,
-                                             self.cc_on, self.cc_api, self.cc_pin,
+                                             self.cc_on, self.cc_api, self.cc_session, self.cc_pin
                                              )
             self.output_buffer+=json.dumps(self.security.secure_init_message(self.username))

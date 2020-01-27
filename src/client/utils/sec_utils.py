@@ -261,7 +261,7 @@ def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> padding_mode: string (optional)
 # returns:
 #   -> boolean
-def verify(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
+def verify(public_key, signature, data, hash_alg='SHA1', padding_mode='PSS'):
     hashing=get_hash_alg(hash_alg)
     padding=get_padding_mode(padding_mode)
     return public_key.verify(signature, data, padding, hashing)

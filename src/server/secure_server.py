@@ -49,6 +49,7 @@ class SecureServer(object):
         self.current_suite=None
         self.game_over=False
         self.clients={}
+        self.atuhenticated_clients={}
         self.previous_plays=[]
         server_logger.debug('croupier up')
 
@@ -138,6 +139,12 @@ class SecureServer(object):
     def client_handle(self, client_socket):
         payload=self.clients[client_socket]['input_buffer']
         server_logger.debug(payload)
+        payload=json.loads(payload)
+        if payload['operation']=='player@sign_in':
+            server_logger.debug('Executing player sign in')
+            self.crypto_actions.sign_in(self.clients[client_socket]['address'], payload)
+        else:
+            pass
         self.clients[client_socket]['input_buffer']=''
         server_logger.debug(self.clients[client_socket])
 

@@ -1,5 +1,8 @@
-import base64 import sys import os
+import base64 
+import sys 
+import os
 
+from OpenSSL import crypto
 from cryptography.fernet import Fernet
 from cryptography.exceptions import *
 from cryptography.hazmat.backends import default_backend
@@ -7,8 +10,6 @@ from cryptography.hazmat.primitives import hashes, serialization, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding, ec
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
-KEYS='../keys'
 
 ######## SELECTORS ########
 # args:
@@ -56,7 +57,7 @@ def get_padding_mode(mode, hash_alg):
             salt_length=padding.PSS.MAX_LENGTH
         )
     }
-    return paddings[padding_mode]
+    return paddings[mode]
 
 # args:
 #   -> algorithm: string
@@ -133,10 +134,8 @@ def generate_hash_digest(data_2_digest, hash_alg):
     digest.update(data_2_digest)
     return digest.finalize()
 
-# args:
-#   -> None
 # returns:
-#   -> EllipticCvePrivateKey
+#   -> EllipticCurvePrivateKey
 def generate_dh():
     key=ec.generate_private_key(
         ec.SECP384R1(),
@@ -185,12 +184,13 @@ def generate_mac(key, data, hash_alg='SHA2'):
 
 ######## FILE OPERS ########
 # args:
-#   -> key: RSAPrivateKey
-#   -> usr: integer
+#   -> path: string
+#   -> key : RSAPrivateKey
+#   -> usr : integer
 # returns:
 #   -> None
-def write_private_key(key, usr)
-    with open(os.path.join(key, str(uid), '/prv_rsa'), 'wb') as file:
+def write_private_key(path, key, usr):
+    with open(os.path.join(path, 'prv_rsa'), 'wb') as file:
         payload=key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,
@@ -199,11 +199,12 @@ def write_private_key(key, usr)
         file.write(payload)
 
 # args:
+#   -> path: string
 #   -> usr: integer
 # returns:
 #   -> RSAPrivateKey
-def write_public_key(key, usr)
-    with open(os.path.join(key, str(uid), '/prv_rsa'), 'rb') as file:
+def read_private_key(path, key, usr):
+    with open(os.path.join(path, 'prv_rsa'), 'rb') as file:
         payload=serialization.load_pem_private_key(
             file.read(),
             password=None,
@@ -212,12 +213,13 @@ def write_public_key(key, usr)
     return payload
 
 # args:
+#   -> path: string
 #   -> key: RSAPrivateKey
 #   -> usr: integer
 # returns:
 #   -> None
-def write_public_key(key, usr)
-    with open(os.path.join(key, str(uid), '/pub_rsa'), 'wb') as file:
+def write_public_key(path, key, usr):
+    with open(os.path.join(path, 'pub_rsa'), 'wb') as file:
         payload=key.public_bytes(
             serialization.Encoding.PEM,
             serialization.PublicFormat.SubjectPublicKeyInfo
@@ -225,11 +227,12 @@ def write_public_key(key, usr)
         file.write(payload)
 
 # args:
+#   -> path: string
 #   -> usr: integer
 # returns:
 #   -> RSAPublicKey
-def write_public_key(key, usr)
-    with open(os.path.join(key, str(uid), '/pub_rsa'), 'rb') as file:
+def read_public_key(path, key, usr):
+    with open(os.path.join(path, 'pub_rsa'), 'rb') as file:
         payload=serialization.load_pem_public_key(
             file.read(),
             backend=default_backend()
@@ -246,7 +249,7 @@ def write_public_key(key, usr)
 #   -> 64-byte signature
 def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     sign=private_key.sign(data, padding, hashing)
     return sign
 
@@ -258,9 +261,13 @@ def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> padding_mode: string (optional)
 # returns:
 #   -> boolean
-def verify(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
+def verify(public_key, signature, data, hash_alg='SHA1', padding_mode='PSS'):
+    if not isinstance(public_key,RSAPublicKey):
+        throw 
+        return 'Failure'
+    if not 
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     return public_key.verify(signature, data, padding, hashing)
 
 # args:
@@ -272,7 +279,7 @@ def verify(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> bytes
 def asym_encrypt(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     return public_key.encrypt(data, padding, hashing)
 
 # args:
@@ -284,7 +291,7 @@ def asym_encrypt(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> 64-byte signature
 def asym_decrypt(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     return public_key.decrypt(data, padding, hashing)
 
 ######## SYM MECHS ########
@@ -404,7 +411,7 @@ def deserialize_key(serialized_key):
 #       }
 # possible values:
 #   [HASH_ALG]    = MD5  | SHA2     | SHA3
-#   [SYM_ALG]     = AES  | CAM      | FERN
+#   [SYM_ALG]     = AES  | CAM      | FER
 #   [SYM_MODE]    = CBC  | CTR      | OFB  | CFB | CFB8 
 #   [CIPHER_PADD] = OAEP | PKCS1v15 | PSS
 #   [SIGN_PADD]   = OAEP | PKCS1v15 | PSS

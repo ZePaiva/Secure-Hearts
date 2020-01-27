@@ -5,11 +5,12 @@ import json
 
 from utils.sec_utils import *
 from utils.certificates_utils import *
+from cryptography.hazmat.primitives.serialization import Encoding
 
 sec_logger=logging.getLogger('SECURITY')
 
 class CryptographyClient(object):
-    def __init__(self, uuid, prv_key, pub_key, cipher_methods, log_time, cc_on, cc=None, cc_pin=None):
+    def __init__(self, uuid, prv_key, pub_key, cipher_methods, log_time, cc_on, cc=None, cc_session=None, cc_pin=None):
         # logging basic stuff
         logging.basicConfig(filename='log/client_'+log_time+'.logs',
                                     filemode='a',
@@ -28,9 +29,11 @@ class CryptographyClient(object):
         if self.cc_on:
             self.cc=cc
             self.cc_cert=self.cc.get_pubKey_cert()
+            self.cc_session=cc_session
         else:
             self.cc=None
             self.cc_cert=None
+            self.cc_session=None
 
         # security stuff
         self.private_value=None     # ephemeral private key
@@ -67,7 +70,8 @@ class CryptographyClient(object):
                     'name': username,
                     'key': serialize_key(self.pub_key),
                     'salt': base64.b64encode(first_salt).decode('utf-8'),
-                    'derivations': self.derivation_number
+                    'derivations': self.derivation_number,
+                    'certificate': base64.b64encode(self.cc_cert.public_bytes(Encoding.PEM)).decode('utf-8'),
                 }
             ).encode('utf-8')
         )
@@ -75,10 +79,10 @@ class CryptographyClient(object):
         sec_logger.debug('signing first message')
         if self.cc_on:
             if self.cc_pin:
-                signature=base64.b64encode(self.cc.cc_sign(prep, pin=self.cc_pin)).decode('utf-8')
+                signature=base64.b64encode(self.cc.cc_sign(prep, session=self.cc_session, pin=self.cc_pin)).decode('utf-8')
             else:
-                pin=self.cc.ask_pin()
-                signature=base64.b64encode(self.cc.cc_sign(prep, pin=pin)).decode('utf-8')
+                pin, session=self.cc.ask_pin()
+                signature=base64.b64encode(self.cc.cc_sign(prep, session=session, pin=pin)).decode('utf-8')
         else:
             signature=base64.b64encode(
                 sign(
@@ -94,7 +98,7 @@ class CryptographyClient(object):
             'operation': 'player@sign_in',
             'message': prep.decode('utf-8'),
             'signature': signature,
-            'certificate': serialize_cert(self.cc_cert)
+            'cipher_suite': self.cipher_methods
         }
         sec_logger.debug('first package is: \n'+str(package))
         return package
