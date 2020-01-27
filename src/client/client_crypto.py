@@ -68,7 +68,7 @@ class CryptographyClient(object):
                     'key': serialize_key(self.pub_key),
                     'salt': base64.b64encode(first_salt).decode('utf-8'),
                     'derivations': self.derivation_number,
-                    'certificate': base64.b64encode(self.cc_cert.public_bytes(Encoding.PEM)).decode('utf-8'),
+                    'certificate': serialize_cert(self.cc_cert),
                 }
             ).encode('utf-8')
         )
@@ -92,7 +92,8 @@ class CryptographyClient(object):
             'operation': 'player@sign_in',
             'message': prep.decode('utf-8'),
             'signature': signature,
-            'cipher_suite': self.cipher_methods
+            'cipher_suite': self.cipher_methods,
+            'cc_user': self.cc_on
         }
         sec_logger.debug('first package is: \n'+str(package))
         return package

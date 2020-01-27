@@ -139,10 +139,16 @@ class SecureClient(object):
         sym_alg_types=['AES','CAM','FER']
         sym_mode_types=['CBC','CTR','OFB','CFB','CFB8']
         padd_types=['OAEP','PKCS1v15','PSS']
-        cli=YesNo(prompt='Do you wish to use default cipher suite (SHA2-AES-CBC-OAEP-PSS-SHA2)? ')
+        if self.cc_on:
+            cli=YesNo(prompt='Do you wish to use default cipher suite (SHA2-AES-CBC-OAEP-PKCS1v15-SHA2)? ')
+        else:
+            cli=YesNo(prompt='Do you wish to use default cipher suite (SHA2-AES-CBC-OAEP-PSS-SHA2)? ')
         cl=cli.launch()
         if cl:
-            return get_cipher_methods("SHA2-AES-CBC-OAEP-PSS-SHA2")
+            if self.cc_on:
+                return get_cipher_methods("SHA2-AES-CBC-OAEP-PKCS1v15-SHA2")
+            else:
+                return get_cipher_methods("SHA2-AES-CBC-OAEP-PSS-SHA2")
         cli=SlidePrompt(
             [
                 Bullet(
@@ -211,7 +217,10 @@ class SecureClient(object):
         types=[]
         for r in rez:
             types+=[r[1]]
-        suite=types[0]+"-"+types[1]+'-'+types[2]+'-'+types[3]+'-PSS-'+types[4]
+        if self.cc_on:
+            suite=types[0]+"-"+types[1]+'-'+types[2]+'-'+types[3]+'-PKCS1v15-'+types[4]
+        else:
+            suite=types[0]+"-"+types[1]+'-'+types[2]+'-'+types[3]+'-PSS-'+types[4]
         client_logger.info('SUITE: '+suite)
         return get_cipher_methods(suite)
 

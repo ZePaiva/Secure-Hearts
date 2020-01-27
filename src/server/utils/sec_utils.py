@@ -53,7 +53,7 @@ def get_padding_mode(mode, hash_alg):
         ),
         'PKCS1v15': padding.PKCS1v15(),
         'PSS': padding.PSS(
-            mgf=padding.MGF1(hash_alg),
+            mgf=padding.MGF1(algorithm=hash_alg),
             salt_length=padding.PSS.MAX_LENGTH
         )
     }
@@ -186,10 +186,9 @@ def generate_mac(key, data, hash_alg='SHA2'):
 # args:
 #   -> path: string
 #   -> key : RSAPrivateKey
-#   -> usr : integer
 # returns:
 #   -> None
-def write_private_key(path, key, usr):
+def write_private_key(path, key):
     with open(os.path.join(path, 'prv_rsa'), 'wb') as file:
         payload=key.private_bytes(
             serialization.Encoding.PEM,
@@ -200,10 +199,9 @@ def write_private_key(path, key, usr):
 
 # args:
 #   -> path: string
-#   -> usr: integer
 # returns:
 #   -> RSAPrivateKey
-def read_private_key(path, key, usr):
+def read_private_key(path):
     with open(os.path.join(path, 'prv_rsa'), 'rb') as file:
         payload=serialization.load_pem_private_key(
             file.read(),
@@ -215,10 +213,9 @@ def read_private_key(path, key, usr):
 # args:
 #   -> path: string
 #   -> key: RSAPrivateKey
-#   -> usr: integer
 # returns:
 #   -> None
-def write_public_key(path, key, usr):
+def write_public_key(path, key):
     with open(os.path.join(path, 'pub_rsa'), 'wb') as file:
         payload=key.public_bytes(
             serialization.Encoding.PEM,
@@ -228,10 +225,9 @@ def write_public_key(path, key, usr):
 
 # args:
 #   -> path: string
-#   -> usr: integer
 # returns:
 #   -> RSAPublicKey
-def read_public_key(path, key, usr):
+def read_public_key(path):
     with open(os.path.join(path, 'pub_rsa'), 'rb') as file:
         payload=serialization.load_pem_public_key(
             file.read(),
@@ -261,14 +257,19 @@ def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> padding_mode: string (optional)
 # returns:
 #   -> boolean
-def verify(public_key, signature, data, hash_alg='SHA1', padding_mode='PSS'):
-    if not isinstance(public_key,RSAPublicKey):
-        throw 
-        return 'Failure'
-    if not 
+def verify(public_key, signature, data, hash_alg='SHA2', padding_mode='PSS'):
     hashing=get_hash_alg(hash_alg)
     padding=get_padding_mode(padding_mode, hashing)
     return public_key.verify(signature, data, padding, hashing)
+    #return public_key.verify(
+    #    signature,
+    #    data,
+    #    padding.PSS(
+    #        mgf=padding.MGF1(hashes.SHA256()),
+    #        salt_length=padding.PSS.MAX_LENGTH
+    #    ),
+    #    hashes.SHA256()
+    #)
 
 # args:
 #   -> public_key  : RSAPublicKey

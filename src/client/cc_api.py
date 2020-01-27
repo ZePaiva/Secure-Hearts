@@ -89,7 +89,8 @@ class CC_API(object):
         try:
             cc_certs_obj=session.findObjects(
                 [
-                    (CKA_CLASS, CKO_CERTIFICATE)
+                    (CKA_CLASS, CKO_CERTIFICATE),
+                    (CKA_LABEL, 'CITIZEN AUTHENTICATION CERTIFICATE')
                 ]
             )
             for cert_obj in cc_certs_obj:

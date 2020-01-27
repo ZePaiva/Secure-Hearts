@@ -259,7 +259,7 @@ def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> boolean
 def verify(public_key, signature, data, hash_alg='SHA1', padding_mode='PSS'):
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     return public_key.verify(signature, data, padding, hashing)
 
 # args:
@@ -271,7 +271,7 @@ def verify(public_key, signature, data, hash_alg='SHA1', padding_mode='PSS'):
 #   -> bytes
 def asym_encrypt(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     return public_key.encrypt(data, padding, hashing)
 
 # args:
@@ -283,7 +283,7 @@ def asym_encrypt(public_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> 64-byte signature
 def asym_decrypt(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
     hashing=get_hash_alg(hash_alg)
-    padding=get_padding_mode(padding_mode)
+    padding=get_padding_mode(padding_mode, hashing)
     return public_key.decrypt(data, padding, hashing)
 
 ######## SYM MECHS ########

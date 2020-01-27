@@ -10,9 +10,11 @@ import traceback
 import time
 import uuid
 import base64
-
 from pprint import pprint
+
+# crypto modules
 from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography import x509
 
 # work bibs
 from hearts import *
@@ -44,7 +46,7 @@ class CryptographyServer(object):
     def sign_in(self, player_addr, payload_day_0):
         security_logger.debug('Reached sign in to player '+str(player_addr))
         try:
-            if not set({'message', 'operation','signature','certificate','cipher_suite'}).issubset(set(payload_day_0.keys())):
+            if not set({'message', 'operation','signature','cipher_suite', 'cc_user'}).issubset(set(payload_day_0.keys())):
                 return {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
             security_logger.debug('player_addr: '+str(player_addr))
             security_logger.debug('player_payload: '+str(payload_day_0))
@@ -54,22 +56,21 @@ class CryptographyServer(object):
                 ).decode()
             )
             cipher_methods=payload_day_0['cipher_suite']
-            signature=payload_day_0['signature']
-            #### get pub key from cert
-            #certificate=deserialize_cert(payload_day_0['certificate'])
-            #publicKey=certificate.get_pubkey().to_cryptography_key()
-            #### new way
-            certificate=base64.b64decode(decoded_message['certificate'])
-            cert=X509.load_pem_x509_certificate(certificate, default_backend())
-            publicKey=cert.public_key()
-            security_logger.debug('Checking signature')
-            valid_sign=verify(publicKey, signature, payload_day_0['message'].encode('utf-8'), hash_alg=cipher_methods['asym']['sign']['hashing'], padding_mode=cipher_methods['asym']['sign']['padding'])
-            if not valid_sign:
-                security_logger('Received invalid signature from '+str(player_addr))
+            signature=base64.b64decode(
+                payload_day_0['signature'].encode()
+            )
+            if payload_day_0['cc_user']:
+                certificate=deserialize_cert(decoded_message['certificate'])
+                publicKey=certificate.get_pubkey().to_cryptography_key()
+                security_logger.debug('Checking signature')
+            else:
+                publicKey=deserialize_key(decoded_message['key'])
+            try:
+                valid_sign=verify(publicKey, signature, payload_day_0['message'].encode(), hash_alg=cipher_methods['asym']['sign']['hashing'], padding_mode=cipher_methods['asym']['sign']['padding'])
+            except InvalidSignature:
+                security_logger.debug('Received invalid signature from '+str(player_addr))
                 return {'operation': 'ERROR', 'error': 'wrong signature'}
             security_logger.debug('Signature valid, checking certificat CoT')
-            valid_cert=verify_CoT(cert, )
-            print(decoded_message)
            # self.sec_clients_dict.update({payload_day_0['uuid']: 
            #                               {
            #                                 'name': payload_day_0['name'],
