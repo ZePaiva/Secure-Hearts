@@ -22,6 +22,7 @@ from player import *
 client_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
 level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
 client_logger=logging.getLogger('CLIENT')
+log_time=str(int(time.time()))
 logging.basicConfig(filename='log/client_'+log_time+'.logs',
                             filemode='a',
                             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -92,7 +93,7 @@ class Client:
         while 1:
             try:
                 try:
-                    data=conn.recv(BUFFER_SIZE).decode('utf-8')
+                    data=self.sock.recv(BUFFER_SIZE).decode('utf-8')
                 except ConnectionResetError: # connection was reseted
                     self.delete_client(conn)
                     break
@@ -107,6 +108,7 @@ class Client:
                     payload = json.loads(d)
                     operation = payload["operation"]
                     if(operation == "server@require_action"):
+                        # handle client trial to create table
                         if(payload["answer"] == "player@request_create_table"):
                             if(payload["success"]):
                                 self.player.owner = True
@@ -118,10 +120,10 @@ class Client:
                                 client_logger.warning("To leave the table, please press CTRL-C")
                             else:
                                 client_logger.warning("Player didn't create table " + str(payload["table"]))
-
+                        # handle client trial to register
                         elif(payload["answer"] == "client@register_player"):
                             client_logger.info("Player registered")
-
+                        # handle client trial to delete table
                         elif(payload["answer"] == "player@request_delete_table"):
                             if(payload["success"]):
                                 self.player.owner = False
@@ -131,7 +133,7 @@ class Client:
                                 client_logger.info("Player deleted the table with success")
                             else:
                                 client_logger.warning("Player didn't delete the table " + payload["table"])
-
+                        # handle client trial to leave table
                         elif(payload["answer"] == "player@request_leave_table"):
                             if(payload["success"]):
                                 self.player.in_table = False
@@ -141,7 +143,7 @@ class Client:
                                 client_logger.info("Player left the table with success")
                             else:
                                 client_logger.warning("Player didn't leave the table")
-
+                        # handle client trial to join table
                         elif(payload["answer"] == "player@request_join_table"):
                             if(payload["success"]):
                                 self.player.in_table = True
@@ -152,11 +154,13 @@ class Client:
                                 client_logger.warning("To leave the table, please press CTRL-C")
                             else:
                                 client_logger.warning("Player didn't join the table")
+                        # handle client trial to start game
                         elif(payload["answer"] == "player@game_start"):
                             self.player.in_table = True
                             self.player.table = payload["table"]
                             self.player.playing = True
                             client_logger.warning("Game started!")
+                    # handle client trial to start game
                     elif(operation == "server@register_failed"):
                         client_logger.warning("Username already taken. Please choose another")
                         self.register_player()

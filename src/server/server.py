@@ -66,7 +66,7 @@ class SecureServer(object):
 
     def get_conn_from_username(self, username):
         for connection in self.clients.keys():
-            if(self.clients[connection]["username"] == username):
+            if self.clients[connection]["username"]==username:
                 break
         return connection
 
@@ -114,7 +114,7 @@ class SecureServer(object):
             payload=json.loads(data)
             operation = payload["operation"]
             # handle client connecting
-            if(operation == "client@register_player"):
+            if operation=="client@register_player":
                 server_logger.debug('Player trying to sign in')
                 # client crypto sign in
                 client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
@@ -136,17 +136,17 @@ class SecureServer(object):
                 self.require_action(conn, answer=operation)
                 server_logger.info("Sent a message to " + username + " to require an action")
             # handle client disconnecting
-            elif(operation == "client@disconnect_client"):
+            elif operation=="client@disconnect_client":
                 self.delete_client(conn)
                 break
             # handle client asking online users
-            elif(operation == "player@request_online_users"):
+            elif operation=="player@request_online_users":
                 self.croupier.send_online_players(conn)
             # handle client asking possible tables
-            elif(operation == "player@request_tables_online"):
+            elif operation=="player@request_tables_online":
                 self.croupier.send_online_tables(conn)
             # handle client asking to create table
-            elif(operation == "player@request_create_table"):
+            elif operation=="player@request_create_table":
                 success = self.croupier.create_table(payload, conn)
                 if success:
                     nplayers = self.croupier.tables[payload["table"]]["nplayers"]
@@ -154,18 +154,18 @@ class SecureServer(object):
                 else:
                     self.require_action(conn, answer=operation, success=success, table=None)
             # handle client asking to delete table
-            elif(operation == "player@request_delete_table"):
+            elif operation=="player@request_delete_table":
                 success = self.croupier.delete_table(payload, conn)
                 if success:
                     self.require_action(conn, answer=operation, success=success, table=None)
                 else:
                     self.require_action(conn, answer=operation, success=success, table=payload["table"])
             # handling client asking to join table
-            elif(operation == "player@request_join_table"):
+            elif operation=="player@request_join_table":
                 success = self.croupier.join_player_table(payload, conn)
-                if(success == 0):
+                if success==0:
                     self.require_action(conn, answer=operation, success=success, table=None) 
-                elif(success == 1):
+                elif success==1:
                     nplayers = self.croupier.tables[payload["table"]]["nplayers"]
                     self.require_action(conn, answer=operation, success=success, table=payload["table"], nplayers=nplayers) 
                 else:
@@ -179,17 +179,16 @@ class SecureServer(object):
                     # send order to respective player
                     server_logger.info("Game started at table " + payload["table"])
             # handling client asking to leave table
-            elif(operation == "player@request_leave_table"):
+            elif operation=="player@request_leave_table":
                 success = self.croupier.remove_player_table(payload, conn)
                 if success:
                     self.require_action(conn, answer=operation, success=success, table=None)
                 else:
                     self.require_action(conn, answer=operation, success=success, table=payload["table"])
             # handling client asking to leave game
-            elif(operation == "player@request_leave_croupier"):
+            elif operation=="player@request_leave_croupier":
                 self.delete_client(conn)
                 break
-            elif(operation == '')
 
     def run(self):
         while True:

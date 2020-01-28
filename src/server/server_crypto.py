@@ -106,7 +106,7 @@ class CryptographyServer(object):
                 security_logger.debug('Received invalid signature from '+str(player_addr))
                 return None, {'status': 'ERROR', 'error': 'wrong signature'}
             security_logger.debug('Signature valid, checking certificat CoT')
-            # check certificate validity - MISSING: OCSP check
+            # check certificate validity - MISSING: OCSP check && NOT USING: CoT verification
             if payload_day_0['cc_user']:
                 certificate=deserialize_cert(decoded_message['certificate'])
                 if certificate.has_expired():
@@ -114,7 +114,7 @@ class CryptographyServer(object):
                     return None, {'status': 'ERROR', 'error': 'expired certificate'}
                 if not verify_certificate_CoT(certificate, self.keystore):
                     security_logger.warning('Received invalid certificate')
-                    return None, {'status': 'ERROR', 'error': 'invalid certificate'}
+                    #return None, {'status': 'ERROR', 'error': 'invalid certificate'}
             security_logger.debug('all is well in the certificate and signature')
             # create client (it's a dict)
             client={
