@@ -12,6 +12,9 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from OpenSSL import crypto
 from OpenSSL.crypto import dump_certificate, load_certificate, load_crl, FILETYPE_ASN1, FILETYPE_PEM, Error, X509Store, X509StoreContext, X509StoreFlags, X509StoreContextError
+
+import traceback
+
 ######## CERTIFICATES STUFF ########
 # args:
 #   -> name: string
@@ -233,13 +236,13 @@ def load_certificates(cert_dir, crl_dir):
                         certAuth=load_certificate(FILETYPE_PEM, cert_info)
                         trusted_certificates=trusted_certificates+[certAuth]
                     elif "Raiz" in filename:
-                        root=load_certificate(FILETYPE_ASN1,cert_info)
+                        certAuth=load_certificate(FILETYPE_ASN1,cert_info)
                         root_certificates=root_certificates+[certAuth]
                     else:
                         certAuth=load_certificate(FILETYPE_ASN1, cert_info)
                         trusted_certificates=trusted_certificates+[certAuth]
                 except Exception as e:
-                    print('err2')
+                    print('e: ' + str(e))
                     exit(10)
             elif ".crt" in filename:
                 try:

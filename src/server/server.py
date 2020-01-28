@@ -70,13 +70,16 @@ class SecureServer(object):
                 break
         return connection
 
-    def require_action(self, conn, answer="", success=1, mode="pre-game", table=None):
+    def require_action(self, conn, answer="", success=1, mode="pre-game", table=None, nplayers=0, username=None):
         payload = {
             "operation":"server@require_action",
             "answer":answer,
             "success":success,
             "mode":mode,
-            "table":table
+            "table":table,
+            "nplayers":nplayers,
+            "username":username
+
         }
         payload = json.dumps(payload)
         try:
@@ -93,8 +96,11 @@ class SecureServer(object):
             self.croupier.delete_player(conn)
         except UnboundLocalError:
             pass
+
+        # username = self.croupier.get_username(conn)
         conn.close()
-        server_logger.info("Disconnected " + self.clients[conn]["username"])
+        # server_logger.info("Disconnected " + str(username))
+        server_logger.info("Disconnected " + str(conn))
 
     def communication_thread(self, conn, addr):
         while 1:
@@ -117,24 +123,37 @@ class SecureServer(object):
             if operation=="client@register_player":
                 server_logger.debug('Player trying to sign in')
                 # client crypto sign in
-                client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
-                # cliente failed to pass security to log in
-                if not client:
-                    server_logger.warning('bad client tried to sign in')
-                    response['operation']='server@register_failed'
-                    payload=json.dumps(response)
-                    while payload:
-                        to_send=payload[:BUFFER_SIZE]
-                        conn.send(to_send.encode())
-                        payload=payload[BUFFER_SIZE:]
-                    conn.close()
-                    exit()
+                # client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
+                # # cliente failed to pass security to log in
+                # if not client:
+                #     server_logger.warning('bad client tried to sign in')
+                #     response['operation']='server@register_failed'
+                #     payload=json.dumps(response)
+                #     while payload:
+                #         to_send=payload[:BUFFER_SIZE]
+                #         conn.send(to_send.encode())
+                #         payload=payload[BUFFER_SIZE:]
+                #     conn.close()
+                #     exit()
                 # if client passed security for log in add him to database
-                self.clients[conn]["username"]=client['username']
-                self.croupier.add_player(conn, addr, client['username'])
-                server_logger.info("Player " + username + " joined the server")
-                self.require_action(conn, answer=operation)
-                server_logger.info("Sent a message to " + username + " to require an action")
+                # self.clients[conn]["username"]=client['username']
+                
+                username = payload["username"]
+                success = self.croupier.add_player(conn, addr, username)
+
+                if success:
+                    self.clients[conn]["username"] = username
+                    server_logger.info("Player " + username + " joined the server")
+                    server_logger.info("Sent a message to " + username + " to require an action")
+                    self.require_action(conn, answer=operation, success=success, username=username)
+                else:
+                    payload = {
+                        "operation":"server@register_failed"
+                    }
+                    payload = json.dumps(payload)
+                    conn.send(payload.encode())
+                    server_logger.warning("Informed client that username is already taken")                   
+                
             # handle client disconnecting
             elif operation=="client@disconnect_client":
                 self.delete_client(conn)
