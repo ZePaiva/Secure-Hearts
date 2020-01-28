@@ -30,7 +30,7 @@ logging.basicConfig(filename='log/client_'+log_time+'.logs',
                             level=logging.DEBUG)
 BUFFER_SIZE=512*1024
 
-class Client:
+class SecureClient:
     def __init__(self, host='0.0.0.0', port=8080, log_level='DEBUG'):
         # logging
         coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=client_log_colors)
@@ -257,7 +257,3 @@ class Client:
 
     def menu_in_game(self):
         print("Playing")
-
-client = Client()
-
-client.run()

@@ -1,3 +1,4 @@
-pyca
-bullet
-PyKCS11
+pyca==1.0.0
+bullet==2.1.0
+PyKCS11==1.5.5
+pyOpenSSL==19.1.0

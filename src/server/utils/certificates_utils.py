@@ -231,15 +231,16 @@ def load_certificates(cert_dir, crl_dir):
                 try:
                     if "0012" in filename or "0013" in filename or "0015" in filename:
                         certAuth=load_certificate(FILETYPE_PEM, cert_info)
+                        trusted_certificates=trusted_certificates+[certAuth]
                     elif "Raiz" in filename:
                         root=load_certificate(FILETYPE_ASN1,cert_info)
+                        root_certificates=root_certificates+[certAuth]
                     else:
                         certAuth=load_certificate(FILETYPE_ASN1, cert_info)
+                        trusted_certificates=trusted_certificates+[certAuth]
                 except Exception as e:
                     print('err2')
                     exit(10)
-                else:
-                    trusted_certificates=trusted_certificates+[certAuth]
             elif ".crt" in filename:
                 try:
                     if "ca_ecc" in filename:
@@ -248,11 +249,10 @@ def load_certificates(cert_dir, crl_dir):
                         root=load_certificate(FILETYPE_PEM, cert_info)
                     else:
                         root=load_certificate(FILETYPE_ASN1, cert_info)
+                    root_certificates=root_certificates+[root]
                 except:
                     print('err3')
                     exit(10)
-                else:
-                    root_certificates=root_certificates+[root]
     # load certificate revocation lists
     for filename in os.listdir(crl_dir):
         try:

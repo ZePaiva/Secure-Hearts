@@ -4,7 +4,7 @@ import traceback
 import threading
 
 # server 
-from secure_client import SecureClient
+from client import SecureClient
 
 # arguments
 ap=argparse.ArgumentParser()
@@ -38,7 +38,7 @@ def main():
     while True:
         #try:
             sec_client=SecureClient(SERV, PORT, LOG)
-            sec_client.listen()
+            sec_client.run()
         #except KeyboardInterrupt as e:
         #    try:
         #        sec_server.pause()
