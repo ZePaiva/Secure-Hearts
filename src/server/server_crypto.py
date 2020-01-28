@@ -77,7 +77,7 @@ class CryptographyServer(object):
         security_logger.debug('Reached sign in to player '+str(player_addr))
         try:
             if not set({'message', 'operation','signature','cipher_suite', 'cc_user'}).issubset(set(payload_day_0.keys())):
-                return None, {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
+                return None, {'status': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
             security_logger.debug('player_addr: '+str(player_addr))
             security_logger.debug('player_payload: '+str(payload_day_0))
             # parse received args
@@ -87,7 +87,7 @@ class CryptographyServer(object):
                 ).decode()
             )
             if not set({'name','key','salt','derivations','certificate','dh_value'}).issubset(set(decoded_message.keys())):
-                return None, {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
+                return None, {'status': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
             cipher_methods=payload_day_0['cipher_suite']
             signature=base64.b64decode(
                 payload_day_0['signature'].encode()
@@ -104,17 +104,17 @@ class CryptographyServer(object):
                 valid_sign=verify(publicKey, signature, payload_day_0['message'].encode(), hash_alg=cipher_methods['asym']['sign']['hashing'], padding_mode=cipher_methods['asym']['sign']['padding'])
             except InvalidSignature:
                 security_logger.debug('Received invalid signature from '+str(player_addr))
-                return None, {'operation': 'ERROR', 'error': 'wrong signature'}
+                return None, {'status': 'ERROR', 'error': 'wrong signature'}
             security_logger.debug('Signature valid, checking certificat CoT')
             # check certificate validity - MISSING: OCSP check
             if payload_day_0['cc_user']:
                 certificate=deserialize_cert(decoded_message['certificate'])
                 if certificate.has_expired():
                     security_logger.warning('Received expired certificate')
-                    return None, {'operation': 'ERROR', 'error': 'expired certificate'}
+                    return None, {'status': 'ERROR', 'error': 'expired certificate'}
                 if not verify_certificate_CoT(certificate, self.keystore):
                     security_logger.warning('Received invalid certificate')
-                    return None, {'operation': 'ERROR', 'error': 'invalid certificate'}
+                    return None, {'status': 'ERROR', 'error': 'invalid certificate'}
             security_logger.debug('all is well in the certificate and signature')
             # create client (it's a dict)
             client={
@@ -130,7 +130,7 @@ class CryptographyServer(object):
             }
             security_logger.info('new client validated, ready to accept')
             self.sec_clients_dict.update({player_addr: client})
-            return client, {'operation': 'sign_in', 'status': 'success'} 
+            return client, {'status': 'success'} 
         except Exception as e:
             security_logger.exception('Exception '+str(e)+' @ player_sign_in')
         return None, None
@@ -232,6 +232,23 @@ class CryptographyServer(object):
         return message
 
     # opens secure messages
+    # format of received secure package
+    # {
+    #   'operation': <string>,
+    #   'mac': <decoded-base64encoded-bytes>,
+    #   'cipher_suite': <string>,
+    #   'package': (base64encoded-encoded) 
+    #       {
+    #           'message': <decoded-base64encoded-ciphertext>,
+    #           'security_data':
+    #               {
+    #                   'dh_public_value': <serialized_public_key>,
+    #                   'salt': <decoded-base64encoded-bytes>,
+    #                   'iv': <decoded-base64encoded-bytes>,
+    #                   'derivation': <integer>
+    #               }
+    #       }
+    # }
     def parse_security(self, player_addr, secure_package):
         # Check all payload fields and specs
         if not set({'operation', 'package', 'cipher_suite', 'mac'}).issubset(set(secure_package.keys())):
@@ -267,8 +284,7 @@ class CryptographyServer(object):
                 self.sec_clients_dict[player_addr]['cipher_methods']['hash']):
             security_logger.info('received message with wrong MAC from player %s', player_addr)
             return {'type': 'error', 'error': "Invalid MAC; dropping message"}
-
-        # Decipher payload
+        # Decipher secure package
         security_logger.debug('generating ECDH cipher and deciphering message to send')
         dh_cipher, dh_iv = generate_sym_cipher(
             key, 
@@ -280,7 +296,7 @@ class CryptographyServer(object):
                 )['security_data']['iv'].encode('utf-8')
             )
         )
-        # Decipher message, if present
+        # Decipher message
         if 'message' in package:
             decryptor=dh_cipher.decryptor()
             message=decryptor.update(

@@ -22,7 +22,12 @@ from player import *
 client_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
 level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
 client_logger=logging.getLogger('CLIENT')
-
+logging.basicConfig(filename='log/client_'+log_time+'.logs',
+                            filemode='a',
+                            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                            datefmt='%H:%M:%S',
+                            level=logging.DEBUG)
+BUFFER_SIZE=512*1024
 
 class Client:
     def __init__(self, host='0.0.0.0', port=8080, log_level='DEBUG'):
@@ -39,22 +44,28 @@ class Client:
 
     def register_player(self):
         try:
-            username = input("Username: ")
-            self.player = Player(username)
-            payload = {
+            username=input("Username: ")
+            self.player=Player(username)
+            payload={
                 "operation":"client@register_player",
                 "username":self.player.username
             }
-            payload = json.dumps(payload)
-            self.sock.send(payload.encode())
+            payload=json.dumps(payload)
+            try:
+                while payload:
+                    to_send=payload[:BUFFER_SIZE]
+                    self.sock.send(to_send.encode())
+                    payload=payload[BUFFER_SIZE:]
+            except OSError:
+                self.delete_client(conn)
+                server_logger.warning("Connection to server was closed")
 
         except KeyboardInterrupt:
             client_logger.info("Disconnected")
-
-            payload = {
+            payload={
                 "operation":"client@disconnect_client"
             }
-            payload = json.dumps(payload)
+            payload=json.dumps(payload)
             self.sock.send(payload.encode())
 
     def connect(self):
@@ -68,21 +79,28 @@ class Client:
     # debugs data if it has several payloads in it
     def debug_data(self, data):
         d = data.split(b'}{')
-
         if(len(d) > 1):
             for i in range(0, len(d)):
                 if(i % 2 == 0):
                     d[i] += b'}'
                 else:
                     d[i] = b'{' + d[i]
-        return d 
+        return d
 
     def player_handler(self):
         self.register_player()
         while 1:
             try:
-                data = self.sock.recv(1024)
+                try:
+                    data=conn.recv(BUFFER_SIZE).decode('utf-8')
+                except ConnectionResetError: # connection was reseted
+                    self.delete_client(conn)
+                    break
+                except OSError: # connection was closed
+                    self.delete_client(conn)
+                    break
                 if not data:
+                    client_logger.error('Server closed')
                     break
                 debugged = self.debug_data(data)
                 for d in debugged:

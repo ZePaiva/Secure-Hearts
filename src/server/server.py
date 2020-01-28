@@ -121,6 +121,7 @@ class SecureServer(object):
                 # cliente failed to pass security to log in
                 if not client:
                     server_logger.warning('bad client tried to sign in')
+                    response['operation']='server@register_failed'
                     payload=json.dumps(response)
                     while payload:
                         to_send=payload[:BUFFER_SIZE]
@@ -188,6 +189,7 @@ class SecureServer(object):
             elif(operation == "player@request_leave_croupier"):
                 self.delete_client(conn)
                 break
+            elif(operation == '')
 
     def run(self):
         while True:
