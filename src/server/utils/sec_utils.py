@@ -103,12 +103,12 @@ def generate_sym_cipher(key, mode, alg, iv=None):
 
 # args:
 #   -> passsword: bytes
-#   -> length   : integer
 #   -> hash_alg : string
+#   -> length   : integer
 #   -> salt     : bytes
 # returns:
 #   -> bytes
-def generate_derived_key(password, hash_alg, salt=('sec_project_4_rec').encode('utf-8')):
+def generate_derived_key(password, hash_alg, length, salt=('sec_project_4_rec').encode('utf-8')):
     hashing=get_hash_alg(hash_alg)
     info=('handshake').encode('utf-8')
     derivation=PBKDF2HMAC(
@@ -164,8 +164,8 @@ def generate_key_dh(private_key, peer_key,
     for i in range(0, number_of_derivations):
         key=generate_derived_key(
             key,
-            length,
             hash_alg,
+            length,
             private_salt+peer_salt
         )
     return key
@@ -261,15 +261,6 @@ def verify(public_key, signature, data, hash_alg='SHA2', padding_mode='PSS'):
     hashing=get_hash_alg(hash_alg)
     padding=get_padding_mode(padding_mode, hashing)
     return public_key.verify(signature, data, padding, hashing)
-    #return public_key.verify(
-    #    signature,
-    #    data,
-    #    padding.PSS(
-    #        mgf=padding.MGF1(hashes.SHA256()),
-    #        salt_length=padding.PSS.MAX_LENGTH
-    #    ),
-    #    hashes.SHA256()
-    #)
 
 # args:
 #   -> public_key  : RSAPublicKey

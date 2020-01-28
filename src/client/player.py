@@ -1,65 +1,117 @@
+# logging
+import logging
+import coloredlogs
+
+# server
+import socket
 import json
-import struct
-from utils.server_utils import send
+import sys
+import traceback
+
+import time 
+
+# threading
+from _thread import *
+
+# hearts
+
+player_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
+level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
+player_logger=logging.getLogger('PLAYER')
+
 
 class Player:
-    def __init__(self, hand=[], player_id=''):
-        self.hand = hand
-        self.id = player_id
-        self.order = None
-        self.points = 0
-        self.used_cards = []
+    def __init__(self, username, log_level='DEBUG'):
+        # logging
+        coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=player_log_colors)
 
-    def update_hand(self, hand):
-        self.hand = hand
+        # game related
+        self.username = username
+        self.table = -1
+        self.points = -1
+        self.hand = []
+        self.owner = False
+        self.in_table = False
+        self.playing = False
+        self.table = None
 
-    def update_id(self, player_id):
-        self.id = player_id
-
-    def update_order(self, order):
-        self.order = order
+    def update_table(self, table):
+        self.table = table 
+        player_logger.info("Table updated")
 
     def update_points(self, points):
-        self.points += points
+        self.points = points 
+        player_logger.info("Points updated")
 
-    def update_used_cards(self, cards):
-        self.used_cards.extend(cards)
+    def update_hand(self, hand):
+        self.hand = hand.copy()
+        player_logger.info("Hand updated")
 
-
-    def communicate_has_2C(self, s):
+    def request_join_table(self, table, conn):
         payload = {
-            "operation":"player@has_two_of_clubs",
-            "player_id": self.id,
-            "has_2C": "2C" in self.hand     
+            "operation":"player@request_join_table",
+            "username": self.username,
+            "table": table
         }
-        # s.send(json.dumps(payload).encode())
-        send(s, payload)
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Requested to join table " + str(table))
 
-
-    def communicate_is_ready(self, s):
+    def request_leave_table(self, table, conn):
         payload = {
-            "operation":"player@is_ready",
-            "player_id": self.id,
-            "order": self.order,
-            "ready": True
+            "operation":"player@request_leave_table",
+            "username":self.username,
+            "table":table
         }
-        # s.send(json.dumps(payload).encode())
-        send(s, payload)
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Requested to leave table " + str(table))
 
-
-    def play(self, s):
-        card = ''
-        print('Your hand: ' + str(self.hand))
-        while card not in self.hand:
-            card = input('Play a card from your hand: ')
-        self.hand.remove(card)
+    def request_create_table(self, table, conn):
         payload = {
-            "operation":"player@play",
-            "player_id": self.id,
-            "order": self.order,
-            "card" : str(card)  
+            "operation":"player@request_create_table",
+            "username":self.username,
+            "table":table,
+            "limit":4
         }
-        # s.send(json.dumps(payload).encode())
-        send(s, payload)
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Requested to create table " + str(table))
 
+
+    def request_delete_table(self, table, conn):
+        payload = {
+            "operation":"player@request_delete_table",
+            "username":self.username,
+            "table":table
+        }
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Requested to delete table " + str(table))
+
+
+    def request_tables_online(self, conn):
+        payload = {
+            "operation":"player@request_tables_online",
+            "username":self.username
+        }
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Requested online tables")
+
+    def request_online_users(self, conn):
+        payload = {
+            "operation":"player@request_online_users",
+            "username":self.username
+        }
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Requested usernames of online players")
+
+
+    def request_leave_croupier(self, conn):
+        payload = {
+            "operation":"player@request_leave_croupier",
+            "username":self.username
+        }
 

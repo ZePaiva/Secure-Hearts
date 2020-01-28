@@ -1,147 +1,219 @@
+# logging
+import logging
+import coloredlogs
+
+# server
 import socket
-import sys
 import json
+import sys
 import traceback
+
+# threading
 from _thread import *
-from hearts import *
-from croupier import *
-from utils.server_utils import send, receive
 
+# croupier
+from croupier import Croupier
 
-host = '0.0.0.0'
-port = 8080
+# cryptography 
+from server_crypto import *
+from utils.server_utils import *
+from utils.server_utils import *
 
-clients = []
+# server logging
+server_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
+level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
+server_logger=logging.getLogger('SERVER')
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+BUFFER_SIZE=512*1024
 
-try:
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((host,port))
-    print('socket binding to ' + host + ':' + str(port))
-except Exception as e:
-    print(e)
-    sys.exit(1)
+class SecureServer(object):
+    def __init__(self, host='0.0.0.0', port=8080, log_level='INFO', tables=4):
+        # logging
+        coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
+        self.tables=tables
 
-s.listen(4) # listens to up to 4 clients
-print('Waiting for 4 clients')
+        # server socket
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((host,port))
+        self.sock.listen(4*self.tables)
+        server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
+        server_logger.debug('server up, can support up to '+str(tables)+' and '+str(4*tables)+' players')
 
-# game related
-croup = Croupier(deck=cards)
-current_player_idx = None
-cards_on_table = []
-current_suit = ''
-game_end = 0
+        # game related
+        self.clients = {}
+        self.croupier = Croupier()
+        server_logger.debug('Croupier UP')
 
-def clientthread():
-    global clients
-    global croup
-    global current_player_idx
-    global cards_on_table
-    global current_suit
-    global game_end
-    conn, addr = clients[-1]
-    identification = addr[0] + ":" + str(addr[1])
-    while 1:
-        # data = conn.recv(1024)
-        data = receive(conn)
-        if not data:
-            break
+        # security related
+        self.cryptography=CryptographyServer(log_level)
+        server_logger.debug('Cryptography server UP')
+
+    def accept_client(self):
         try:
-            payload = json.loads(data)
-            print(payload)
-            operation = payload['operation']
-            if operation == "player@has_two_of_clubs":
-                croup.without_suits[payload["player_id"]] = []
-                if payload["has_2C"]:
-                    croup.give_order((conn, addr))
-                    current_player_idx = 0
-            elif operation == "player@is_ready":
-                if payload["order"] == current_player_idx:
-                    croup.demand_play_card(current_player_idx)
-            elif operation == "player@play":
-                if croup.round==0 and current_player_idx==0 and payload['card']!='2C':
-                    croup.demand_play_card(current_player_idx, 'must start with that play')
-                elif not croup.heart_brake and current_player_idx==0 and 'H' in payload['card']:
-                    croup.demand_play_card(current_player_idx, 'hearts not broken')
-                elif payload["order"] == current_player_idx:
-                    if current_player_idx == 0:
-                        current_suit = payload["card"][-1]
-
-                    player_id = payload["player_id"]
-                    suit_played = payload["card"][-1]
-
-                    if suit_played in croup.without_suits[player_id]:
-                        print('Player {} cheated. The game will now end!'.format(player_id))
-                        game_end = 1
-                        sys.exit(0)
-
-                    if suit_played != current_suit:
-                        if suit_played not in croup.without_suits[player_id]:
-                            croup.without_suits[player_id].append(current_suit)
-                            print(croup.without_suits)
-                        
-
-                    croup.round+=1
-                    if 'H' in payload['card']:
-                        croup.heart_brake=True
-                    cards_on_table.append((payload["order"], payload["card"]))
-                    print(cards_on_table)
-
-                    if current_player_idx == len(clients)-1:
-                        # get the loser of the table
-                        cards_for_loser = [c[1] for c in cards_on_table.copy()]
-                        # from hearts
-                        hc = get_higher_card(cards_for_loser, current_suit)
-                        loser_idx = 0
-                        for o,c in cards_on_table:
-                            if c == hc:
-                                loser_idx = o
-                                break
-
-                        current_suit = ''
-                        current_player_idx = 0
-                        cards_on_table = []
-
-                        croup.give_cards_to_loser(loser_idx, cards_for_loser)
-
-                    else:
-                        current_player_idx = (current_player_idx + 1) % 4
-                        croup.demand_play_card(current_idx=current_player_idx, table=[c[1] for c in cards_on_table])
-
+            conn, addr = self.sock.accept()
+            if conn in self.clients:
+                server_logger.warning('Client %s already exists', conn)
+                return None
+            self.clients[conn] = {
+                "address":addr,
+                "conn":conn
+            }
+            server_logger.info("Client " + str(conn) + " accepted.")
+            return conn, addr
         except Exception as e:
-            print('Exception in server.py at clientthread')
-            print(e)
-            traceback.print_exc()
-            print('Not json')
-            print(data.decode())
-        
-    conn.close()
+            return None
 
-while 1:
-    try:
-        conn, addr = s.accept()
-        clients.append((conn, addr))
-        print('Connected with ' + str(addr[0]) + ":" + str(addr[1]))
-        croup.missing_players(len(clients), clients)
-        start_new_thread(clientthread, ())
-        if len(clients)==4:
-            croup.update_players(clients)
-            croup.give_cards()
-        '''
-            still not working properly
-            game_end is not update in clientthread
-            need to fix that
-        '''
-        if game_end:
-            print('IN GAME END')
-            sys.exit(0)
-    except Exception as e:
-        print('Exception in server.py at mainthread')
-        print(e)
-        s.close()
-        traceback.print_exc()
-        print('Socket closed')
-        print('Exiting')
+    def get_conn_from_username(self, username):
+        for connection in self.clients.keys():
+            if(self.clients[connection]["username"] == username):
+                break
+        return connection
+
+    def require_action(self, conn, answer="", success=1, mode="pre-game", table=None):
+        payload = {
+            "operation":"server@require_action",
+            "answer":answer,
+            "success":success,
+            "mode":mode,
+            "table":table
+        }
+        payload = json.dumps(payload)
+        try:
+            while payload:
+                to_send=payload[:BUFFER_SIZE]
+                conn.send(to_send.encode())
+                payload=payload[BUFFER_SIZE:]
+        except OSError:
+            self.delete_client(conn)
+            server_logger.warning("Connection was closed")
+
+    def delete_client(self, conn):
+        try:
+            self.croupier.delete_player(conn)
+        except UnboundLocalError:
+            pass
+        conn.close()
+        server_logger.info("Disconnected " + self.clients[conn]["username"])
+
+    def communication_thread(self, conn, addr):
+        while 1:
+            try:
+                data=conn.recv(BUFFER_SIZE).decode('utf-8')
+            except ConnectionResetError: # connection was reseted
+                self.delete_client(conn)
+                break
+            except OSError: # connection was closed
+                self.delete_client(conn)
+                break
+            # client dead
+            if not data:
+                self.delete_client(conn)
+                break
+            # parsing data
+            payload=json.loads(data)
+            operation = payload["operation"]
+            # handle client connecting
+            if(operation == "client@register_player"):
+                server_logger.debug('Player trying to sign in')
+                # client crypto sign in
+                client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
+                # cliente failed to pass security to log in
+                if not client:
+                    server_logger.warning('bad client tried to sign in')
+                    payload=json.dumps(response)
+                    while payload:
+                        to_send=payload[:BUFFER_SIZE]
+                        conn.send(to_send.encode())
+                        payload=payload[BUFFER_SIZE:]
+                    conn.close()
+                    exit()
+                # if client passed security for log in add him to database
+                self.clients[conn]["username"]=client['username']
+                self.croupier.add_player(conn, addr, client['username'])
+                server_logger.info("Player " + username + " joined the server")
+                self.require_action(conn, answer=operation)
+                server_logger.info("Sent a message to " + username + " to require an action")
+            # handle client disconnecting
+            elif(operation == "client@disconnect_client"):
+                self.delete_client(conn)
+                break
+            # handle client asking online users
+            elif(operation == "player@request_online_users"):
+                self.croupier.send_online_players(conn)
+            # handle client asking possible tables
+            elif(operation == "player@request_tables_online"):
+                self.croupier.send_online_tables(conn)
+            # handle client asking to create table
+            elif(operation == "player@request_create_table"):
+                success = self.croupier.create_table(payload, conn)
+                if success:
+                    nplayers = self.croupier.tables[payload["table"]]["nplayers"]
+                    self.require_action(conn, answer=operation, success=success, table=payload["table"], nplayers=nplayers)
+                else:
+                    self.require_action(conn, answer=operation, success=success, table=None)
+            # handle client asking to delete table
+            elif(operation == "player@request_delete_table"):
+                success = self.croupier.delete_table(payload, conn)
+                if success:
+                    self.require_action(conn, answer=operation, success=success, table=None)
+                else:
+                    self.require_action(conn, answer=operation, success=success, table=payload["table"])
+            # handling client asking to join table
+            elif(operation == "player@request_join_table"):
+                success = self.croupier.join_player_table(payload, conn)
+                if(success == 0):
+                    self.require_action(conn, answer=operation, success=success, table=None) 
+                elif(success == 1):
+                    nplayers = self.croupier.tables[payload["table"]]["nplayers"]
+                    self.require_action(conn, answer=operation, success=success, table=payload["table"], nplayers=nplayers) 
+                else:
+                    connections = success
+                    nplayers = self.croupier.tables[payload["table"]]["nplayers"]
+                    # send information about game starting
+                    for connection in connections:
+                        self.require_action(connection, answer="player@game_start", success=1, mode="in-game", table=payload["table"], nplayers=nplayers)
+                        server_logger.info("Sent information about the starting of the game to " + self.croupier.get_username(connection))
+                    # shuffle player order
+                    # send order to respective player
+                    server_logger.info("Game started at table " + payload["table"])
+            # handling client asking to leave table
+            elif(operation == "player@request_leave_table"):
+                success = self.croupier.remove_player_table(payload, conn)
+                if success:
+                    self.require_action(conn, answer=operation, success=success, table=None)
+                else:
+                    self.require_action(conn, answer=operation, success=success, table=payload["table"])
+            # handling client asking to leave game
+            elif(operation == "player@request_leave_croupier"):
+                self.delete_client(conn)
+                break
+
+    def run(self):
+        while True:
+            try:
+                conn, addr = self.accept_client()
+                start_new_thread(self.communication_thread,(conn, addr, ))
+            except Exception as e:
+                server_logger.exception(e)
+
+    def pause(self):
+        server_logger.info('Server paused, press CTRL+C again to exit')
+        try:
+            self.sock.close()
+        except:
+            server_logger.exception("Server Stopping")
+        for client in self.clients:
+            client.close()
+        self.clients=[]
+        time.sleep(5)
+
+    def exit(self):
+        server_logger.info('Exiting...')
+        self.sock.close()
+        sys.exit(0)
+
+    def emergency_exit(self, exception):
+        server_logger.critical('An Exception caused an emergency exit')
+        server_logger.exception(exception)
         sys.exit(1)
-

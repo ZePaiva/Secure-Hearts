@@ -40,11 +40,27 @@ class CryptographyServer(object):
         security_logger.debug('Got security')
 
         # security
+        # secure clients db
+        # has following format
+        # sec_clients={
+        #   <client_id|client_socket>:{
+        #       'username':<string|name>,
+        #       'certificate':<X509Certificate|client cert>,
+        #       'client_public_key':<RSAPublicKey|client public rsa key>,
+        #       'client_dh_value':<EllipticCurvePublicKey|client public ECDH value>,
+        #       'derivations':<integer|number of hash derivations>
+        #       'client_salt':<bytes|salt to derivation hash>,
+        #       'cipher_methods':<string|client ciphering methods>,
+        #       'cc_user':<boolean|client using pt e-id>,
+        #       'pbk_sent':<boolean|has client received most recent public key>
+        #    }
         self.sec_clients_dict={}
+        # load keystore
         certs_dir=os.path.join(CERTS,'CCCerts')
         crl_dir=os.path.join(CERTS,'CCCRL')
         self.root_certificates, self.trusted_certificates, self.revoqued_lists=load_certificates(certs_dir, crl_dir)
         self.keystore=load_KeyStore(self.root_certificates, self.trusted_certificates, self.revoqued_lists)
+        # load private and public RSA keys
         if not os.path.exists(os.path.join(KEYS, 'prv_key.rsa')):
             self.private_key=generate_rsa()
             write_private_key(os.path.join(KEYS,'prv_key.rsa'), self.private_key)
@@ -70,7 +86,7 @@ class CryptographyServer(object):
                     payload_day_0['message'].encode('utf-8')
                 ).decode()
             )
-            if not set({'name','key','salt','derivations','certificate'}).issubset(set(decoded_message.keys())):
+            if not set({'name','key','salt','derivations','certificate','dh_value'}).issubset(set(decoded_message.keys())):
                 return None, {'operation': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
             cipher_methods=payload_day_0['cipher_suite']
             signature=base64.b64decode(
@@ -104,11 +120,13 @@ class CryptographyServer(object):
             client={
                 'username':decoded_message['name'],
                 'certificate':deserialize_cert(decoded_message['certificate']),
-                'public_key':deserialize_key(decoded_message['key']),
+                'client_public_key':deserialize_key(decoded_message['key']),
+                'client_dh_value':deserialize_key(decoded_message['dh_value']),
                 'derivations':decoded_message['derivations'],
-                'salt':base64.b64decode(decoded_message['salt'].encode()),
+                'client_salt':base64.b64decode(decoded_message['salt'].encode()),
                 'cipher_methods':payload_day_0['cipher_suite'],
-                'cc_user':payload_day_0['cc_user']
+                'cc_user':payload_day_0['cc_user'],
+                'pbk_sent':false
             }
             security_logger.info('new client validated, ready to accept')
             self.sec_clients_dict.update({player_addr: client})
@@ -117,23 +135,162 @@ class CryptographyServer(object):
             security_logger.exception('Exception '+str(e)+' @ player_sign_in')
         return None, None
 
-    # secures json packages(messages)
-    def secure_package(self, message):
+    # secures packages to send them
+    # format of sent secure package
+    # {
+    #   'operation': <string>,
+    #   'mac': <decoded-base64encoded-bytes>,
+    #   'cipher_suite': <string>,
+    #   'signature': <decoded-base64encoded-bytes>,
+    #   'package': (base64encoded-encoded) 
+    #       {
+    #           'message': <decoded-base64encoded-ciphertext>,
+    #           'security_data':
+    #               {
+    #                   'dh_public_value': <serialized_public_key>,
+    #                   'salt': <decoded-base64encoded-bytes>,
+    #                   'iv': <decoded-base64encoded-bytes>,
+    #                   'derivation': <integer>
+    #               }
+    #       }
+    # }
+    def secure_package(self, player_addr, message, operation):
+        security_logger.debug('calculating private values')
+        # Values used in key exchange
+        self.sec_clients_dict[player_addr]['salt']=os.urandom(16)
+        self.sec_clients_dict[player_addr]['private_dh_value']=generate_dh()
+        # Derive DH key and cipher message
+        security_logger.debug('generating ECDH key')
+        dh_key = generate_key_dh(
+            self.sec_clients_dict[player_addr]['private_dh_value'],
+            self.sec_clients_dict[player_addr]['client_dh_value'],
+            self.sec_clients_dict[player_addr]['salt'],
+            self.sec_clients_dict[player_addr]['client_salt'],
+            self.sec_clients_dict[player_addr]['cipher_methods']['sym']['key_size'],
+            self.sec_clients_dict[player_addr]['cipher_methods']['hash'],
+            self.sec_clients_dict[player_addr]['derivations'],
+        )
+        security_logger.debug('generating ECDH cipher and ciphering message to send')
+        dh_cipher, dh_iv = generate_sym_cipher(
+            key, 
+            self.cipher_suite['sym']['mode'], 
+            self.cipher_suite['sym']['algorithm']
+        )
+        encryptor=dh_cipher.encryptor()
+        ciphered_message=encryptor.update(
+            json.dumps(message).encode()
+        )+encryptor.finalize()
+        security_logger.debug('generating package')
+        package=base64.b64encode(
+            json.dumps(
+                {
+                    'message': base64.b64encode(ciphered_message).decode('utf-8'),
+                    'security_data': {
+                        'dh_public_value': serialize_key(self.sec_clients_dict[player_addr]['private_dh_value'].public_key()),
+                        'salt': base64.b64encode(self.sec_clients_dict[player_addr]['salt']).decode('utf-8'),
+                        'iv': base64.b64encode(dh_iv).decode('utf-8'),
+                        'derivation': self.sec_clients_dict[player_addr]['derivations']
+                    }
+                }
+            ).encode('utf-8')
+        )
+        security_logger.debug('generating MAC')
+        mac=base64.b64encode(
+            generate_mac(
+                    dh_key,
+                    package,
+                    self.sec_clients_dict[player_addr]['cipher_methods']['sym']['key_size'],
+                )
+            ).decode('utf-8')
+        security_logger.debug('checing if it has to send new key')
+        if not self.sec_clients_dict[player_addr]['cert_sent']:
+            security_logger.info('Updating client %s with new server key', player_addr)
+            signature=base64.b64encode(
+                sign(
+                    self.private_key,
+                    package,
+                    self.sec_clients_dict[player_addr]['cipher_methods']['asym']['sign']['hashing'],
+                    self.sec_clients_dict[player_addr]['cipher_methods']['asym']['sign']['padding'],
+                )
+            ).decode('utf-8')
+            message = {
+                'operation': operation,
+                'package': package.decode('utf-8'),
+                'mac': mac,
+                'signature': signature,
+                'public_key': serialize_key(self.public_key),
+                'cipher_suite': self.sec_clients_dict[player_addr]['cipher_methods']
+            }
+        else:
+            message = {
+                'operation': operation,
+                'package': package.decode('utf-8'),
+                'mac': mac,
+                'cipher_suite': self.sec_clients_dict[player_addr]['cipher_methods']
+            }
+        security_logger.debug('Message secured, proceedto launching it to bad spaces, like star trek or classes with Maria')
         return message
 
-    # start card distribution
-    #   -> create deck and server-side signature
-    def start_card_distribution(self, starter_uuid):
-        security_logger.debug('Reached start distribution card to player '+str(player_addr))
+    # opens secure messages
+    def parse_security(self, player_addr, secure_package):
+        # Check all payload fields and specs
+        if not set({'operation', 'package', 'cipher_suite', 'mac'}).issubset(set(secure_package.keys())):
+            security_logger.warning('incomplete message received from client %s', player_addr)
+            return {'operation': 'ERROR', 'error': 'incomplete message'}
+        if secure_package['cipher_suite']!=self.sec_clients_dict[player_addr]['cipher_methods']:
+            security_logger.warning('%s changed cipher specs without warning', player_addr)
+            return {'operation': 'ERROR', 'error': 'bad cipher specs'}
+        # passing to payload parsing
+        package=json.loads(
+            base64.b64decode(
+                message['package'].encode()
+            ).decode('utf-8')
+        )
+        # Derive key and decipher payload
+        self.sec_clients_dict[player_addr]['derivations']=payload['security_data']['derivation']
+        self.sec_clients_dict[player_addr]['client_public_value']=deserialize_key(payload['security_data']['dh_public_value'])
+        self.sec_clients_dict[player_addr]['client_salt']=base64.b64decode(payload['security_data']['salt'].encode())
+        dh_key = generate_key_dh(
+            self.sec_clients_dict[player_addr]['private_dh_value'],
+            self.sec_clients_dict[player_addr]['client_dh_value'],
+            self.sec_clients_dict[player_addr]['salt'],
+            self.sec_clients_dict[player_addr]['client_salt'],
+            self.sec_clients_dict[player_addr]['cipher_methods']['sym']['key_size'],
+            self.sec_clients_dict[player_addr]['cipher_methods']['hash'],
+            self.sec_clients_dict[player_addr]['derivations'],
+        )
+        # Verify MAC to make sure of message integrity
+        if not verify_mac(
+                dh_key, 
+                secure_package['package'].encode('utf-8'),
+                base64.b64decode(secure_package['mac'].encode('utf-8')),
+                self.sec_clients_dict[player_addr]['cipher_methods']['hash']):
+            security_logger.info('received message with wrong MAC from player %s', player_addr)
+            return {'type': 'error', 'error': "Invalid MAC; dropping message"}
 
-    # get all signatures
-    #   -> get all hand signatures (must check if this is useful)
-    def cards_signature(self, player, signature):
-        security_logger.debug('Reached get cards signature to player '+str(player_addr))
-
-    # check fraud
-    #   -> must see which are the valid hands
-    #   -> willl have to ask both players for their hand and signature
-    def fraud_called(self, bad_player_hand, good_player_hand):
-        security_logger.debug('Reached get cards signature to player '+str(player_addr))
-
+        # Decipher payload
+        security_logger.debug('generating ECDH cipher and deciphering message to send')
+        dh_cipher, dh_iv = generate_sym_cipher(
+            key, 
+            self.cipher_suite['sym']['mode'], 
+            self.cipher_suite['sym']['algorithm'],
+            base64.b64decode(
+                base64.b64decode(
+                    secure_package['package'].decode('utf-8')
+                )['security_data']['iv'].encode('utf-8')
+            )
+        )
+        # Decipher message, if present
+        if 'message' in package:
+            decryptor=dh_cipher.decryptor()
+            message=decryptor.update(
+                base64.b64decode(
+                    package['message'].encode('utf-8')
+                )
+            )+decryptor.finalize()
+            message=json.loads(message.decode('utf-8'))
+        else:
+            security_logger.info('received message without content from player %s', player_addr)
+            return {'type': 'error', 'error': "no content"}
+        security_logger.debug('finished process of deciphering message from %s', player_addr)
+        return message
