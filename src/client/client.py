@@ -30,6 +30,8 @@ from cryptography.hazmat.primitives import hashes
 # server logging
 client_logger=logging.getLogger('CLIENT')
 log_time=str(int(time.time()))
+if not os.path.exists(os.path.join(DIR_PATH, 'log')):
+    os.makedirs(os.path.join(DIR_PATH, 'log'))
 logging.basicConfig(filename='log/client_'+log_time+'.logs',
                             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                             datefmt='%H:%M:%S',
@@ -172,7 +174,6 @@ class SecureClient:
 
     # debugs data if it has several payloads in it
     def debug_data(self, data):
-        print(data)
         d = data.split('}{')
         if(len(d) > 1):
             for i in range(0, len(d)):

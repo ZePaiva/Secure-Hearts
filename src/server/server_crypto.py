@@ -79,7 +79,6 @@ class CryptographyServer(object):
     #   -> must use CC stuff
     def sign_in(self, player_addr, payload_day_0):
         security_logger.debug('Reached sign in to player '+str(player_addr))
-
         try:
             if not set({'message', 'operation','signature','cipher_suite', 'cc_user'}).issubset(set(payload_day_0.keys())):
                 return None, {'status': 'ERROR', 'error': 'wrong fields for operation client@register_player'}
