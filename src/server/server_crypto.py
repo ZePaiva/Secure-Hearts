@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography import x509
 
 # work bibs
+from paths import *
 from hearts import *
 from croupier import *
 from utils.server_utils import *
@@ -28,9 +29,6 @@ log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;leve
 level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
 security_logger=logging.getLogger('SECURITY')
 
-DIR_PATH=os.path.dirname(os.path.realpath(__file__))
-KEYS=os.path.join(DIR_PATH, 'keys')
-CERTS=os.path.join(DIR_PATH, 'certs')
 
 # cryptography actions for the game
 class CryptographyServer(object):
@@ -56,17 +54,20 @@ class CryptographyServer(object):
         #    }
         self.sec_clients_dict={}
         # load keystore
-        certs_dir=os.path.join(CERTS,'CCCerts')
-        crl_dir=os.path.join(CERTS,'CCCRL')
-        self.root_certificates, self.trusted_certificates, self.revoqued_lists=load_certificates(certs_dir, crl_dir)
+        security_logger.debug('Loading certificates')
+        self.root_certificates, self.trusted_certificates, self.revoqued_lists=load_certificates(CC_CERTS_DIR, CC_CRL_DIR)
+        security_logger.debug('Creating keystore')
         self.keystore=load_KeyStore(self.root_certificates, self.trusted_certificates, self.revoqued_lists)
         # load private and public RSA keys
-        if not os.path.exists(os.path.join(KEYS, 'prv_key.rsa')):
+        security_logger.debug('Loading keys')
+        if not os.path.exists(os.path.join(KEYS_DIR, 'prv_key.rsa')):
+            security_logger.debug('*Creating keys')
             self.private_key=generate_rsa()
-            write_private_key(os.path.join(KEYS,'prv_key.rsa'), self.private_key)
+            write_private_key(os.path.join(KEYS_DIR,'prv_key.rsa'), self.private_key)
         else:
-            self.private_key=read_private_key(os.path.join(KEYS, 'prv_key.rsa'))
+            self.private_key=read_private_key(os.path.join(KEYS_DIR, 'prv_key.rsa'))
         self.public_key=self.private_key.public_key()
+        self.old_private_key=None
 
     # sign in of a user
     #   -> user can provide multiple ciphering methods
@@ -101,7 +102,13 @@ class CryptographyServer(object):
                 publicKey=deserialize_key(decoded_message['key'])
             # check sign validity
             try:
-                valid_sign=verify(publicKey, signature, payload_day_0['message'].encode(), hash_alg=cipher_methods['asym']['sign']['hashing'], padding_mode=cipher_methods['asym']['sign']['padding'])
+                valid_sign=verify(
+                    publicKey, 
+                    signature, 
+                    payload_day_0['message'].encode(), 
+                    hash_alg=cipher_methods['asym']['sign']['hashing'], 
+                    padding_mode=cipher_methods['asym']['sign']['padding']
+                )
             except InvalidSignature:
                 security_logger.debug('Received invalid signature from '+str(player_addr))
                 return None, {'status': 'ERROR', 'error': 'wrong signature'}
@@ -126,7 +133,7 @@ class CryptographyServer(object):
                 'client_salt':base64.b64decode(decoded_message['salt'].encode()),
                 'cipher_methods':payload_day_0['cipher_suite'],
                 'cc_user':payload_day_0['cc_user'],
-                'pbk_sent':false
+                'pbk_sent':False
             }
             security_logger.info('new client validated, ready to accept')
             self.sec_clients_dict.update({player_addr: client})
@@ -142,6 +149,7 @@ class CryptographyServer(object):
     #   'mac': <decoded-base64encoded-bytes>,
     #   'cipher_suite': <string>,
     #   'signature': <decoded-base64encoded-bytes>,
+    #   'public_key': <serializedpublickey>,
     #   'package': (base64encoded-encoded) 
     #       {
     #           'message': <decoded-base64encoded-ciphertext>,
@@ -154,7 +162,7 @@ class CryptographyServer(object):
     #               }
     #       }
     # }
-    def secure_package(self, player_addr, message, operation):
+    def secure_package(self, player_addr, message, operation, update_public_key=False):
         security_logger.debug('calculating private values')
         # Values used in key exchange
         self.sec_clients_dict[player_addr]['salt']=os.urandom(16)
@@ -173,8 +181,8 @@ class CryptographyServer(object):
         security_logger.debug('generating ECDH cipher and ciphering message to send')
         dh_cipher, dh_iv = generate_sym_cipher(
             key, 
-            self.cipher_suite['sym']['mode'], 
-            self.cipher_suite['sym']['algorithm']
+            self.sec_clients_dict[player_addr]['cipher_methods']['sym']['mode'], 
+            self.sec_clients_dict[player_addr]['cipher_methods']['sym']['algorithm']
         )
         encryptor=dh_cipher.encryptor()
         ciphered_message=encryptor.update(
@@ -203,11 +211,11 @@ class CryptographyServer(object):
                 )
             ).decode('utf-8')
         security_logger.debug('checing if it has to send new key')
-        if not self.sec_clients_dict[player_addr]['cert_sent']:
+        if not self.sec_clients_dict[player_addr]['pbk_sent'] or update_public_key:
             security_logger.info('Updating client %s with new server key', player_addr)
             signature=base64.b64encode(
                 sign(
-                    self.private_key,
+                    self.old_private_key,
                     package,
                     self.sec_clients_dict[player_addr]['cipher_methods']['asym']['sign']['hashing'],
                     self.sec_clients_dict[player_addr]['cipher_methods']['asym']['sign']['padding'],
@@ -221,6 +229,7 @@ class CryptographyServer(object):
                 'public_key': serialize_key(self.public_key),
                 'cipher_suite': self.sec_clients_dict[player_addr]['cipher_methods']
             }
+            self.sec_clients_dict[player_addr]['pbk_sent']=True
         else:
             message = {
                 'operation': operation,
@@ -237,6 +246,8 @@ class CryptographyServer(object):
     #   'operation': <string>,
     #   'mac': <decoded-base64encoded-bytes>,
     #   'cipher_suite': <string>,
+    #   'signature': <decoded-base64encoded-bytes | uses old key>,
+    #   'public_key': <serializedpublickey>,
     #   'package': (base64encoded-encoded) 
     #       {
     #           'message': <decoded-base64encoded-ciphertext>,
@@ -287,12 +298,12 @@ class CryptographyServer(object):
         # Decipher secure package
         security_logger.debug('generating ECDH cipher and deciphering message to send')
         dh_cipher, dh_iv = generate_sym_cipher(
-            key, 
-            self.cipher_suite['sym']['mode'], 
-            self.cipher_suite['sym']['algorithm'],
+            dh_key, 
+            self.sec_clients_dict[player_addr]['cipher_methods']['sym']['mode'], 
+            self.sec_clients_dict[player_addr]['cipher_methods']['sym']['algorithm'],
             base64.b64decode(
                 base64.b64decode(
-                    secure_package['package'].decode('utf-8')
+                    package
                 )['security_data']['iv'].encode('utf-8')
             )
         )
@@ -308,5 +319,40 @@ class CryptographyServer(object):
         else:
             security_logger.info('received message without content from player %s', player_addr)
             return {'type': 'error', 'error': "no content"}
+        # check if client has new public key
+        if set({'signature','public_key'}).issubset(set(secure_package.keys())):
+            security_logger.warning('client %s signaled an update to it\'s public key, trialing with old key signature', player_addr)
+            signature=base64.b64decode(
+                secure_package['signature'].encode()
+            )
+            # picking method to check sign, depends if cc is on or not
+            if self.sec_clients_dict[player_addr]['cc_user']:
+                certificate=self.sec_clients_dict[player_addr]['client_public_key']
+                publicKey=certificate.get_pubkey().to_cryptography_key()
+                security_logger.debug('Checking signature')
+            else:
+                publicKey=self.sec_clients_dict[player_addr]['client_public_key']
+            try:
+                valid_sign=verify(
+                    publicKey, 
+                    signature,
+                    secure_package['package'].encode('utf-8'),
+                    hash_alg=self.sec_clients_dict['cipher_methods']['asym']['sign']['hashing'],
+                    padding_mode=self.sec_clients_dict['cipher_methods']['asym']['sign']['hashing']
+                )
+                self.sec_clients_dict[player_addr]['client_public_key']=deserialize_key(secure_package['public_key'])
+            except InvalidSignature:
+                security_logger.debug('Received invalid signature from '+str(player_addr)+' , discarding this package')
+                return {'type': 'error', 'error': 'Bad new key'}
         security_logger.debug('finished process of deciphering message from %s', player_addr)
         return message
+
+    # update inner keys
+    def update_keys(self, new_private_key):
+        self.old_private_key=self.private_key
+        self.private_key=new_private_key
+        self.public_key=new_private_key.public_key()
+        write_private_key(os.path.join(KEYS_DIR,'prv_key.rsa'), self.private_key)
+        for player in list(self.sec_clients_dict.keys()):
+            self.sec_clients_dict[pla]['pbk_sent']=False        
+        #[self.sec_clients_dict[pla]['pbk_sent']=False for pla in list(self.sec_clients_dict.keys())]

@@ -17,6 +17,7 @@ import keyboard
 
 # player
 from player import *
+from client_crypto import *
 
 # server logging
 client_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')

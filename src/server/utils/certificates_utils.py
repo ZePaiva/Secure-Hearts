@@ -234,7 +234,7 @@ def load_certificates(cert_dir, crl_dir):
                         trusted_certificates=trusted_certificates+[certAuth]
                     elif "Raiz" in filename:
                         root=load_certificate(FILETYPE_ASN1,cert_info)
-                        root_certificates=root_certificates+[certAuth]
+                        root_certificates=root_certificates+[root]
                     else:
                         certAuth=load_certificate(FILETYPE_ASN1, cert_info)
                         trusted_certificates=trusted_certificates+[certAuth]

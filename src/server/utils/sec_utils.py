@@ -189,7 +189,7 @@ def generate_mac(key, data, hash_alg='SHA2'):
 # returns:
 #   -> None
 def write_private_key(path, key):
-    with open('prv_rsa', 'wb') as file:
+    with open(path, 'wb') as file:
         payload=key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,
