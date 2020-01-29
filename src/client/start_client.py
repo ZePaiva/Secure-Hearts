@@ -33,12 +33,11 @@ def main():
     if args['logLevel']:
         LOG=args['logLevel']
     else:
-        LOG='INFO'
+        LOG='DEBUG'
 
-    while True:
-        #try:
-            sec_client=SecureClient(SERV, PORT, LOG)
-            sec_client.run()
+   
+    sec_client=SecureClient(SERV, PORT, LOG)
+    sec_client.run()
         #except KeyboardInterrupt as e:
         #    try:
         #        sec_server.pause()

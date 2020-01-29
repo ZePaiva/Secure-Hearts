@@ -8,6 +8,7 @@ import json
 import sys
 import traceback
 
+import random
 import time 
 
 # threading
@@ -46,6 +47,24 @@ class Player:
     def update_hand(self, hand):
         self.hand = hand.copy()
         player_logger.info("Hand updated")
+
+    def shuffle_cards(self, cards, ntimes=1):
+        for i in range(0, ntimes):
+            random.shuffle(cards)
+
+
+    def return_shuffled_cards(self, table, cards, conn, ntimes=1):
+        self.shuffle_cards(cards, ntimes=1)
+
+        payload = {
+            "operation":"player@return_shuffled_cards",
+            "cards":cards,
+            "table":table
+        }
+        payload = json.dumps(payload)
+        conn.send(payload.encode())
+        player_logger.info("Returned shuffled cards")
+
 
     def request_join_table(self, table, conn):
         payload = {
@@ -99,7 +118,7 @@ class Player:
         conn.send(payload.encode())
         player_logger.info("Requested online tables")
 
-    def request_online_users(self, conn, security):
+    def request_online_users(self, conn):
         payload = {
             "operation":"player@request_online_users",
             "username":self.username

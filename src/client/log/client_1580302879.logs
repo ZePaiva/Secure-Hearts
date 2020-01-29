@@ -1,0 +1,25 @@
+13:01:19 - CLIENT - INFO - Connected
+13:01:19 - CLIENT - DEBUG - logging new client, process started
+13:01:20 - CLIENT - DEBUG - CC - False
+13:01:20 - CLIENT - INFO - Trying to register player with username c
+13:01:20 - CLIENT - INFO - Generated CC certificate
+13:01:21 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PSS', 'hashing': 'SHA2'}}}
+13:01:21 - CLIENT - INFO - Loading keys
+13:01:21 - CLIENT - DEBUG - Loaded private key from /home/xano/Desktop/Folders/UA/S/security1920-g22/src/client/keys/c
+13:01:21 - CLIENT - WARNING - In server@request_crypto
+13:01:21 - SECURITY - DEBUG - Generating ECDH key pair
+13:01:21 - SECURITY - DEBUG - Generating salt
+13:01:21 - SECURITY - DEBUG - creating first message
+13:01:21 - SECURITY - DEBUG - signing first message
+13:01:21 - SECURITY - DEBUG - packaging first message
+13:01:21 - SECURITY - DEBUG - first package received
+13:01:21 - CLIENT - INFO - Sending first_package
+13:01:21 - CLIENT - INFO - Player username: c
+13:01:21 - CLIENT - INFO - Player registered
+13:01:31 - PLAYER - INFO - Requested to join table x1
+13:01:31 - CLIENT - INFO - Player joined table x1 with success
+13:01:31 - CLIENT - INFO - Player is now waiting for table to be ready...(3/4)
+13:01:31 - CLIENT - WARNING - To leave the table, press CTRL-C
+13:01:33 - CLIENT - WARNING - Game started! To exit the game, press CTRL-C
+13:02:40 - CLIENT - INFO - Disconnected
+13:02:40 - CLIENT - INFO - Player requested leaving croupier. Goodbye!

@@ -27,23 +27,30 @@ from utils.sec_utils import *
 from utils.certificates_utils import *
 from cryptography.hazmat.primitives import hashes
 
-# server logging
-client_logger=logging.getLogger('CLIENT')
 log_time=str(int(time.time()))
 logging.basicConfig(filename='log/client_'+log_time+'.logs',
                             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
+
+# server logging
+client_log_colors=coloredlogs.parse_encoded_styles('asctime=green;hostname=magenta;levelname=white,bold;name=blue,bold;programname=cyan')
+level_colors=coloredlogs.parse_encoded_styles('spam=white;info=blue;debug=green;warning=yellow;error=red;critical=red,bold')
+client_logger=logging.getLogger('CLIENT')
+
+
 BUFFER_SIZE=512*1024
 
 class SecureClient:
-    def __init__(self, host='0.0.0.0', port=8080, log_level='ERROR'):
+    def __init__(self, host='0.0.0.0', port=8080, log_level='DEBUG'):
+        # logging
+        coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=client_log_colors)
+
         # client socket
         self.host = host 
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.log_level=log_level
-        client_logger.setLevel(log_level)
 
         # game related
         self.player = None
@@ -52,6 +59,7 @@ class SecureClient:
 
         # security related
         self.cc_api=None
+        self.cc_cert=None
         self.cert=None
         self.cc_num=None
         self.security_handler=None
@@ -76,12 +84,30 @@ class SecureClient:
             # in case of not using cc
             if not cc_on:
                 self.cc_api=None
-                client_logger.debug('no cc')
-                cli=Input('Username: ')
-                self.username=cli.launch()
-                client_logger.debug('username: '+str(self.username))
-                self.cc_cert=generate_certificate(self.username)[0]
-                client_logger.debug('cert: '+str(self.cc_cert))
+                username=input("Username: ")
+                payload={
+                    "operation":"client@register_player",
+                    "username":username
+                }
+                payload=json.dumps(payload)
+                try:
+                    # while payload:
+                    #     payload=payload[:BUFFER_SIZE]
+                    #     self.sock.send(to_send.encode())
+                    #     payload=payload[BUFFER_SIZE:]
+                    self.sock.send(payload.encode())
+                    client_logger.info("Trying to register player with username " + str(username))
+
+                    # let's assume that the username is always correct
+                    # or in other words, it isn't taken by other player
+                    self.username = username
+                    self.cc_cert=generate_certificate(self.username)[0]
+                    client_logger.info("Generated CC certificate")
+
+                except:
+                    traceback.print_exc()
+                    client_logger.warning("Player couldn't register")
+
             # in case of using cc
             else:
                 try:
@@ -112,42 +138,34 @@ class SecureClient:
                 except Exception as e:
                     print()
                     pass
-            # creating player
-            self.player=Player(self.username)
-            client_logger.debug('Player UP')
-            # checking for keys
+
+
+
             keys_dir=os.path.join(KEYS_DIR,str(self.username))
-            client_logger.debug('Loading keys')
+                   
+            client_logger.info('Loading keys')
             if not os.path.exists(keys_dir):
                 # handling creation and storage of keys
                 os.makedirs(keys_dir)
                 rsa_private_key=generate_rsa()
                 write_private_key(os.path.join(keys_dir,'prv_rsa'), rsa_private_key)
-                client_logger.debug('stored private key @ '+keys_dir)
+                client_logger.debug('Stored private key @ ' + keys_dir)
                 write_public_key(os.path.join(keys_dir,'pub_rsa'), rsa_private_key.public_key())
-                client_logger.debug('stored public key @ '+keys_dir)
+                client_logger.debug('Stored public key @ ' + keys_dir)
             else:
                 rsa_private_key=read_private_key(os.path.join(keys_dir,'prv_rsa'))
-                client_logger.debug('loaded private key from '+keys_dir)
+                client_logger.debug('Loaded private key from ' + keys_dir)
+            
             server_key=read_public_key(os.path.join(SERVER_KEY,'pub_rsa'))
+
             # create secure client
             self.security_handler=CryptographyClient(self.log_level,
                                                     rsa_private_key, rsa_private_key.public_key(),
                                                     server_key, cipher_methods, 
                                                     log_time,
-                                                    cc_on, self.cc_cert, self.cc_api
-                                                    )
-            first_package=json.dumps(
-                self.security_handler.secure_init_message(self.username)
-            )
-            try:
-                while first_package:
-                    to_send=first_package[:BUFFER_SIZE]
-                    self.sock.send(to_send.encode())
-                    first_package=first_package[BUFFER_SIZE:]
-            except OSError:
-                self.delete_client(conn)
-                client_logger.warning("Connection to server was closed")
+                                                    cc_on, self.cc_cert, self.cc_api)
+
+            
 
         except KeyboardInterrupt:
             client_logger.info("Disconnected")
@@ -172,37 +190,32 @@ class SecureClient:
 
     # debugs data if it has several payloads in it
     def debug_data(self, data):
-        print(data)
-        d = data.split('}{')
+        d = ((bytes)(data)).split(b'}{')
         if(len(d) > 1):
             for i in range(0, len(d)):
                 if(i % 2 == 0):
-                    d[i] += '}'
+                    d[i] += b'}'
                 else:
-                    d[i] = '{' + d[i]
+                    d[i] = b'{' + d[i]
         return d
 
     def player_handler(self):
         self.register_player()
         while 1:
             try:
-                try:
-                    data=self.sock.recv(BUFFER_SIZE).decode('utf-8')
-                except ConnectionResetError: # connection was reseted
-                    self.delete_client(conn)
-                    break
-                except OSError: # connection was closed
-                    self.delete_client(conn)
-                    break
+                data = self.sock.recv(BUFFER_SIZE)
+             
                 if not data:
-                    client_logger.error('Server closed')
                     break
+                    
                 debugged = self.debug_data(data)
                 for d in debugged:
                     payload = json.loads(d)
                     operation = payload["operation"]
                     if(operation == "server@require_action"):
-                        payload=self.security_handler.server_parse_security(payload)
+                        
+                        # payload=self.security_handler.server_parse_security(payload)
+                        
                         # handle client trial to create table
                         if(payload["answer"] == "player@request_create_table"):
                             if(payload["success"]):
@@ -215,9 +228,31 @@ class SecureClient:
                                 client_logger.warning("To leave the table, please press CTRL-C")
                             else:
                                 client_logger.warning("Player didn't create table " + str(payload["table"]))
+                        
                         # handle client trial to register
                         elif(payload["answer"] == "client@register_player"):
+                            self.username=payload["username"]
+                            client_logger.info("Player username: " + str(payload["username"]))
+                           
+                            self.player=Player(payload["username"])
                             client_logger.info("Player registered")
+
+                        elif(payload["answer"] == "server@request_crypto"):
+                            client_logger.warning("In server@request_crypto")
+                            first_package=json.dumps(
+                                self.security_handler.secure_init_message(self.username)
+                            )
+                            try:
+                                while first_package:
+                                    client_logger.info("Sending first_package")
+                                    to_send=first_package[:BUFFER_SIZE]
+                                    self.sock.send(to_send.encode())
+                                    first_package=first_package[BUFFER_SIZE:]
+                            except OSError:
+                                self.delete_client(conn)
+                                client_logger.warning("Connection to server was closed")
+
+
                         # handle client trial to delete table
                         elif(payload["answer"] == "player@request_delete_table"):
                             if(payload["success"]):
@@ -246,7 +281,7 @@ class SecureClient:
                                 self.player.owner = False
                                 client_logger.info("Player joined table " + payload["table"] + " with success")
                                 client_logger.info("Player is now waiting for table to be ready...({}/4)".format(payload["nplayers"]))
-                                client_logger.warning("To leave the table, please press CTRL-C")
+                                client_logger.warning("To leave the table, press CTRL-C")
                             else:
                                 client_logger.warning("Player didn't join the table")
                         # handle client trial to start game
@@ -254,11 +289,15 @@ class SecureClient:
                             self.player.in_table = True
                             self.player.table = payload["table"]
                             self.player.playing = True
-                            client_logger.warning("Game started!")
+                            client_logger.warning("Game started! To exit the game, press CTRL-C")
                     # handle client trial to start game
                     elif(operation == "server@register_failed"):
-                        client_logger.warning("Username already taken. Please choose another")
-                        self.register_player()
+                        if(payload["error"] == "error@username_taken"):
+                            client_logger.warning("Username already taken. Please, choose a different username")
+                            self.register_player()
+                        elif(payload["error"] == "error@crypto_invalid"):
+                            client_logger.warning("Invalid crypto data sent")
+                            break
                     elif(operation == "croupier@send_online_players"):
                         self.display_online_users(payload)
                     elif(operation == "croupier@send_online_tables"): 
@@ -269,21 +308,37 @@ class SecureClient:
                         self.player.table = None
                         self.player.playing = False
                         client_logger.warning("The table you were in was deleted. You may now join a new table")
+
+                    # game started
+                    elif operation == "croupier@give_shuffled_cards":
+                        # sign cards [ TODO ]
+                        self.player.return_shuffled_cards(payload["table"], payload["cards"], self.sock) 
+
+
                 # after payload's loop
-                if(self.player_not_in_table()):
-                    self.menu_pre_game()
-                else:
-                    if(self.player.playing):
-                        self.menu_in_game()
+                
+                if(self.player):
+                    if(self.player_not_in_table()):
+                        self.menu_pre_game()
+                    else:
+                        if(self.player.playing):
+                            self.menu_in_game()
             except KeyboardInterrupt:
-                if(self.player.in_table):
-                    self.player.request_leave_table(self.player.table, self.sock)
+                if self.player:
+                    if(self.player.in_table):
+                        self.player.request_leave_table(self.player.table, self.sock)
+                    else:
+                        break
                 else:
                     self.exit()
+                    break
+
         client_logger.info("Disconnected")
         if(self.player):
             self.player.request_leave_croupier(self.sock)
-        client_logger.info("Player requested leaving croupier. Goodbye!")
+            client_logger.info("Player requested leaving croupier. Goodbye!")
+        else:
+            self.sock.close()
 
     def run(self):
         self.connect()
@@ -331,10 +386,8 @@ class SecureClient:
             try:
                 option = (int)(input("Option: "))
             except KeyboardInterrupt:
-                if(self.player.in_table):
-                    self.player.request_leave_table(self.player.table, self.sock)
-                else:
-                    break
+                break
+
             except ValueError:
                 # in case client inputs letters
                 client_logger.warning("Invalid option. Please choose a valid option")
@@ -348,11 +401,15 @@ class SecureClient:
         elif(option == 4): # request to join a table
             table = input("Table name: ")
             self.player.request_join_table(table, self.sock)
-        elif(option == 0): # request to join a table
-            print('Exiting...')
+        elif(option == 0): # leave game lobby
             self.exit()
         else:
-            pass
+            payload={
+                "operation":"client@disconnect_client"
+            }
+            payload=json.dumps(payload)
+            self.sock.send(payload.encode())
+            client_logger.info("Trying to disconnect...")
 
     def menu_in_game(self):
         print("Playing")

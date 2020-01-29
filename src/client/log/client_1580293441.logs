@@ -1,0 +1,9 @@
+10:24:01 - CLIENT - INFO - Connected
+10:24:01 - CLIENT - DEBUG - logging new client, process started
+10:24:02 - CLIENT - DEBUG - CC - False
+10:24:04 - CLIENT - INFO - Trying to register player with username xano
+10:24:04 - CLIENT - INFO - Generated CC certificate
+10:24:06 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PSS', 'hashing': 'SHA2'}}}
+10:24:06 - CLIENT - INFO - Loading keys
+10:24:06 - CLIENT - DEBUG - Loaded private key from /home/xano/Desktop/Folders/UA/S/security1920-g22/src/client/keys/xano
+10:24:06 - SECURITY - WARNING - incomplete message received from server

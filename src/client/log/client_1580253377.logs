@@ -1,0 +1,10 @@
+23:16:17 - CLIENT - INFO - Connected
+23:16:19 - CLIENT - INFO - Player registered
+23:16:23 - PLAYER - INFO - Requested to join table x1
+23:16:23 - CLIENT - WARNING - Game started!
+23:16:33 - PLAYER - INFO - Requested to leave table x1
+23:16:33 - CLIENT - INFO - Player left the table with success
+23:17:05 - CLIENT - INFO - Trying to disconnect...
+23:17:05 - CLIENT - ERROR - Server closed
+23:17:05 - CLIENT - INFO - Disconnected
+23:17:05 - CLIENT - INFO - Player requested leaving croupier. Goodbye!

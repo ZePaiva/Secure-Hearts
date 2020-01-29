@@ -1,0 +1,11 @@
+22:51:09 - CLIENT - INFO - Connected
+22:51:12 - CLIENT - INFO - Player registered
+22:51:14 - PLAYER - INFO - Requested to create table x1
+22:51:14 - CLIENT - INFO - Player created table x1 with success
+22:51:14 - CLIENT - INFO - Player is now waiting for table to be ready... (1/4)
+22:51:14 - CLIENT - WARNING - To leave the table, please press CTRL-C
+22:51:15 - PLAYER - INFO - Requested to leave table x1
+22:51:15 - CLIENT - WARNING - The table you were in was deleted. You may now join a new table
+22:51:15 - CLIENT - INFO - Player left the table with success
+22:51:18 - CLIENT - INFO - Disconnected
+22:51:18 - CLIENT - INFO - Player requested leaving croupier. Goodbye!
