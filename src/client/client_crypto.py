@@ -367,6 +367,7 @@ class CryptographyClient(object):
         # securing package to server
         safe_package=self.server_secure_package(package, 'player@create_tunnel')
         safe_package['target_user']=target_user
+        return safe_package
 
     # ciphers message from a user, to create tunnel
     def tunnel_creation_rcv_package(self, tunnel_day_0, cipher_methods, sender_user):
@@ -515,5 +516,9 @@ class CryptographyClient(object):
                 }
             }
         safe_message=self.server_secure_package(message, 'player@sending_secure_message')
+        safe_message['target_user']=target_user
         sec_logger.debug('Message secured, proceedto launching it to bad spaces, like star trek or classes with Maria')
         return safe_message
+
+    # deciphers message from user, after creation of tunnel
+    def tunnne_parse_security(self, target_user, package):
