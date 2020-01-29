@@ -6,19 +6,19 @@ import json
 from utils.sec_utils import *
 from utils.certificates_utils import *
 from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.padding import PKCS7
 
 sec_logger=logging.getLogger('SECURITY')
 
 class CryptographyClient(object):
-    def __init__(self, uuid, prv_key, pub_key, server_public_key, cipher_methods, log_time, cc_on, cert=None, cc=None):
+    def __init__(self, log_level, prv_key, pub_key, server_public_key, cipher_methods, log_time, cc_on, cert=None, cc=None):
         # logging basic stuff
         logging.basicConfig(filename='log/client_'+log_time+'.logs',
-                                    filemode='a',
                                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                                     datefmt='%H:%M:%S',
                                     level=logging.DEBUG)
+        sec_logger.setLevel(log_level)
         # basic passages 
-        self.uuid=uuid
         self.prv_key=prv_key
         self.pub_key=pub_key
         self.cipher_methods=cipher_methods
@@ -61,6 +61,7 @@ class CryptographyClient(object):
         first_salt=os.urandom(16)
         self.salt_dict.update({'server':[]})
         self.salt_dict['server']+=[first_salt]
+
         # creating message 
         sec_logger.debug('creating first message')
         prep=base64.b64encode(
@@ -71,6 +72,7 @@ class CryptographyClient(object):
                     'salt': base64.b64encode(first_salt).decode('utf-8'),
                     'derivations': self.derivations['server'],
                     'certificate': serialize_cert(self.cc_cert),
+                    'dh_value': serialize_key(self.public_value)
                 }
             ).encode('utf-8')
         )
@@ -91,7 +93,7 @@ class CryptographyClient(object):
         # creating package
         sec_logger.debug('packaging first message')
         package={
-            'operation': 'player@sign_in',
+            'operation': 'client@register_player',
             'message': prep.decode('utf-8'),
             'signature': signature,
             'cipher_suite': self.cipher_methods,
@@ -101,7 +103,7 @@ class CryptographyClient(object):
         self.prev_mac=1
         return package
 
-    # cipher messages
+    # cipher server messages
     def server_secure_package(self, package, operation, update_public_key=False):
         sec_logger.debug('Ciphering secure message')
         # Calculating values to use in key exchange 
@@ -109,7 +111,7 @@ class CryptographyClient(object):
         self.salt_dict['server']+=[salt]
         self.derivations['server']+=1
         # Derive DH key and cipher payload
-        security_logger.debug('generating ECDH key')
+        sec_logger.debug('generating ECDH key')
         dh_key = generate_key_dh(
             self.private_value,
             self.other_public_value['server'],
@@ -120,7 +122,7 @@ class CryptographyClient(object):
             self.derivations['server'],
         )
         # generating cipher
-        security_logger.debug('generating ECDH cipher and ciphering message to send')
+        sec_logger.debug('generating ECDH cipher and ciphering message to send')
         dh_cipher, dh_iv = generate_sym_cipher(
             key, 
             self.cipher_methods['sym']['mode'], 
@@ -131,7 +133,7 @@ class CryptographyClient(object):
         ciphered_message=encryptor.update(
             json.dumps(package).encode()
         )+encryptor.finalize()
-        security_logger.debug('generating package')
+        sec_logger.debug('generating package')
         package=base64.b64encode(
             json.dumps(
                 {
@@ -146,7 +148,7 @@ class CryptographyClient(object):
             ).encode('utf-8')
         )
         # Generate MAC
-        security_logger.debug('generating MAC')
+        sec_logger.debug('generating MAC')
         mac=base64.b64encode(
             generate_mac(
                     dh_key,
@@ -156,9 +158,9 @@ class CryptographyClient(object):
             ).decode('utf-8')
         self.prev_mac = mac
         # Build message
-        security_logger.debug('generating message to send')
+        sec_logger.debug('generating message to send')
         if update_public_key:
-            security_logger.info('Updating server with new public key')
+            sec_logger.info('Updating server with new public key')
             if self.cc_on:
                     signature=base64.b64encode(self.cc.cc_sign(prep)).decode('utf-8')
             else:
@@ -185,7 +187,7 @@ class CryptographyClient(object):
                 'mac': mac,
                 'cipher_suite': self.cipher_methods
             }
-        security_logger.debug('Message secured, proceedto launching it to bad spaces, like star trek or classes with Maria')
+        sec_logger.debug('Message secured, proceedto launching it to bad spaces, like star trek or classes with Maria')
         return message
 
     # deciphers received messages from server
@@ -211,18 +213,18 @@ class CryptographyClient(object):
     def server_parse_security(self, secure_package):
         # Check all payload fields and specs
         if not set({'operation', 'package', 'cipher_suite', 'mac'}).issubset(set(secure_package.keys())):
-            security_logger.warning('incomplete message received from server')
+            sec_logger.warning('incomplete message received from server')
             return {'operation': 'ERROR', 'error': 'incomplete message'}
         if secure_package['cipher_suite']!=self.cipher_methods:
-            security_logger.warning('server changed cipher specs without warning')
+            sec_logger.warning('server changed cipher specs without warning')
             return {'operation': 'ERROR', 'error': 'bad cipher specs'}
         # checking if have received ghost message or server message
         if not self.prev_mac:
-            security_logger.warning('got weird message, disposing')
+            sec_logger.warning('got weird message, disposing')
             return {'operation': 'ERROR', 'error': 'no question'}
         if self.prev_mac==1:
             if not set({'signature','public_key'}).issubset(set(secure_package.keys())):
-                security_logger.warning('got weird message, disposing')
+                sec_logger.warning('got weird message, disposing')
                 return {'operation': 'ERROR', 'error': 'wrong type of message'}
             pkey=deserialize_key(secure_package['public_key'])
             signature=base64.b64decode(
@@ -234,57 +236,63 @@ class CryptographyClient(object):
                     signature,
                     secure_package['package'].encode('utf-8'),
                     hash_alg=self.cipher_methods['asym']['sign']['hashing'],
-                    padding_mode=self.cipher_methods['asym']['sign']['hashing']
+                    padding_mode=self.cipher_methods['asym']['sign']['padding']
                 )
             except InvalidSignature:
-                security_logger.debug('Received invalid signature from server , discarding this package')
+                sec_logger.debug('Received invalid signature from server , discarding this package')
                 return {'type': 'error', 'error': 'Bad new key'}
         # passing to payload parsing
         package=json.loads(
             base64.b64decode(
-                message['package'].encode()
+                secure_package['package'].encode()
             ).decode('utf-8')
         )
         # Derive key and decipher payload
         salt=self.derivations['server']-1
-        self.other_public_value['server']=deserialize_key(payload['security_data']['dh_public_value'])
-        self.other_salts['server']=base64.b64decode(payload['security_data']['salt'].encode('utf-8'))
+        self.other_public_value['server']=deserialize_key(package['security_data']['dh_public_value'])
+        self.other_salts['server']=base64.b64decode(package['security_data']['salt'].encode('utf-8'))
         dh_key = generate_key_dh(
             self.private_value,
-            self.server_public_value,
-            salt,
+            self.other_public_value['server'], 
             self.other_salts['server'],
+            self.salt_dict['server'][salt],
             self.cipher_methods['sym']['key_size'],
             self.cipher_methods['hash'],
             self.derivations['server'],
         )
         # Decipher secure package
-        security_logger.debug('generating ECDH cipher and deciphering message to send')
+        sec_logger.debug('generating ECDH cipher and deciphering message to send')
         dh_cipher, dh_iv = generate_sym_cipher(
             dh_key, 
             self.cipher_methods['sym']['mode'], 
             self.cipher_methods['sym']['algorithm'],
             base64.b64decode(
-                base64.b64decode(
-                   package
-                )['security_data']['iv'].encode('utf-8')
+                package['security_data']['iv'].encode('utf-8')
             )
         )
         # Decipher message
         if 'message' in package:
             decryptor=dh_cipher.decryptor()
-            message=decryptor.update(
-                base64.b64decode(
-                    package['message'].encode('utf-8')
-                )
-            )+decryptor.finalize()
+            sym_padding=PKCS7(
+                get_cipher_alg(
+                    self.cipher_methods['sym']['algorithm'],
+                    dh_key
+                ).block_size
+            ).unpadder()
+            message=sym_padding.update(
+                decryptor.update(
+                    base64.b64decode(
+                        package['message'].encode('utf-8')
+                    )
+                )+decryptor.finalize()
+            )+sym_padding.finalize()
             message=json.loads(message.decode('utf-8'))
         else:
-            security_logger.info('received message without content from server')
+            sec_logger.info('received message without content from server')
             return {'type': 'error', 'error': "no content"}
         # check if server has new public key
         if set({'signature','public_key'}).issubset(set(secure_package.keys())):
-            security_logger.warning('server signaled an update to it\'s public key, trialing with old key signature')
+            sec_logger.warning('server signaled an update to it\'s public key, trialing with old key signature')
             signature=base64.b64decode(
                 secure_package['signature'].encode()
             )
@@ -293,12 +301,12 @@ class CryptographyClient(object):
                     self.other_public_key['server'], 
                     signature,
                     secure_package['package'].encode('utf-8'),
-                    hash_alg=self.sec_clients_dict['cipher_methods']['asym']['sign']['hashing'],
-                    padding_mode=self.sec_clients_dict['cipher_methods']['asym']['sign']['hashing']
+                    hash_alg=self.cipher_methods['asym']['sign']['hashing'],
+                    padding_mode=self.cipher_methods['asym']['sign']['padding']
                 )
                 self.other_public_key['server']=deserialize_key(secure_package['public_key'])
             except InvalidSignature:
-                security_logger.debug('Received invalid signature from server, discarding this package')
+                sec_logger.debug('Received invalid signature from server, discarding this package')
                 return {'type': 'error', 'error': 'Bad new key'}
-        security_logger.debug('finished process of deciphering message')
+        sec_logger.debug('finished process of deciphering message')
         return message

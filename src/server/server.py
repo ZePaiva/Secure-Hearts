@@ -79,9 +79,8 @@ class SecureServer(object):
             "table":table,
             "nplayers":nplayers,
             "username":username
-
         }
-        payload = json.dumps(payload)
+        payload = json.dumps(self.cryptography.secure_package(self.clients[conn]['address'], payload, 'server@require_action',update_public_key=True))
         try:
             while payload:
                 to_send=payload[:BUFFER_SIZE]
@@ -123,26 +122,25 @@ class SecureServer(object):
             if operation=="client@register_player":
                 server_logger.debug('Player trying to sign in')
                 # client crypto sign in
-                # client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
-                # # cliente failed to pass security to log in
-                # if not client:
-                #     server_logger.warning('bad client tried to sign in')
-                #     response['operation']='server@register_failed'
-                #     payload=json.dumps(response)
-                #     while payload:
-                #         to_send=payload[:BUFFER_SIZE]
-                #         conn.send(to_send.encode())
-                #         payload=payload[BUFFER_SIZE:]
-                #     conn.close()
-                #     exit()
+                client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
+                # client failed to pass security to log in
+                if not client:
+                    server_logger.warning('bad client tried to sign in')
+                    server_logger.debug(response)
+                    response['operation']='server@register_failed'
+                    payload=json.dumps(response)
+                    while payload:
+                        to_send=payload[:BUFFER_SIZE]
+                        conn.send(to_send.encode())
+                        payload=payload[BUFFER_SIZE:]
+                    conn.close()
+                    exit()
                 # if client passed security for log in add him to database
-                # self.clients[conn]["username"]=client['username']
-                
-                username = payload["username"]
-                success = self.croupier.add_player(conn, addr, username)
+                username=client['username']
+                success=self.croupier.add_player(conn, addr, client['username'])
 
                 if success:
-                    self.clients[conn]["username"] = username
+                    self.clients[conn]["username"]=client['username']
                     server_logger.info("Player " + username + " joined the server")
                     server_logger.info("Sent a message to " + username + " to require an action")
                     self.require_action(conn, answer=operation, success=success, username=username)
@@ -153,7 +151,6 @@ class SecureServer(object):
                     payload = json.dumps(payload)
                     conn.send(payload.encode())
                     server_logger.warning("Informed client that username is already taken")                   
-                
             # handle client disconnecting
             elif operation=="client@disconnect_client":
                 self.delete_client(conn)

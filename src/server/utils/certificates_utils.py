@@ -279,10 +279,8 @@ def verify_certificate_CoT(cert,store):
         return None
     storecontext=None
     try:
-        print('v1')
         storecontext=X509StoreContext(store, cert).verify_certificate()
     except X509StoreContextError as e:
-        print('v2')
         print(e)
         return False
     if storecontext is None:

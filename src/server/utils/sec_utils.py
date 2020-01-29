@@ -30,14 +30,14 @@ def get_hash_alg(hashing):
 # returns:
 #   -> modes.METHOD
 def get_sym_mode(mode, iv):
-    modes={
+    mods={
         'CBC': modes.CBC(iv),
         'CTR': modes.CTR(iv),
         'OFB': modes.OFB(iv),
         'CFB': modes.CFB(iv),
         'CFB8': modes.CFB8(iv)
     }
-    return modes[mode]
+    return mods[mode]
 
 # args:
 #   -> mode     : string
@@ -108,14 +108,14 @@ def generate_sym_cipher(key, mode, alg, iv=None):
 #   -> salt     : bytes
 # returns:
 #   -> bytes
-def generate_derived_key(password, hash_alg, length, salt=('sec_project_4_rec').encode('utf-8')):
+def generate_derived_key(password, hash_alg, length, salt=('sec_project_4_rec').encode('utf-8'), iterations=1):
     hashing=get_hash_alg(hash_alg)
     info=('handshake').encode('utf-8')
     derivation=PBKDF2HMAC(
         algorithm=hashing,
-        length=length,
+        length=length//8,
         salt=salt,
-        info=info,
+        iterations=iterations,
         backend=default_backend()
     )
     return derivation.derive(password)
@@ -155,7 +155,7 @@ def generate_dh():
 #   -> bytes
 def generate_key_dh(private_key, peer_key, 
                     private_salt, peer_salt,
-                    length, hash_alg, n_derivations):
+                    length, hash_alg, number_of_derivations):
     secret=private_key.exchange(
         ec.ECDH(),
         peer_key

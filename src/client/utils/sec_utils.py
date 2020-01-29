@@ -30,14 +30,14 @@ def get_hash_alg(hashing):
 # returns:
 #   -> modes.METHOD
 def get_sym_mode(mode, iv):
-    modes={
+    mods={
         'CBC': modes.CBC(iv),
         'CTR': modes.CTR(iv),
         'OFB': modes.OFB(iv),
         'CFB': modes.CFB(iv),
         'CFB8': modes.CFB8(iv)
     }
-    return modes[mode]
+    return mods[mode]
 
 # args:
 #   -> mode     : string
@@ -53,7 +53,7 @@ def get_padding_mode(mode, hash_alg):
         ),
         'PKCS1v15': padding.PKCS1v15(),
         'PSS': padding.PSS(
-            mgf=padding.MGF1(hash_alg),
+            mgf=padding.MGF1(algorithm=hash_alg),
             salt_length=padding.PSS.MAX_LENGTH
         )
     }
@@ -103,19 +103,19 @@ def generate_sym_cipher(key, mode, alg, iv=None):
 
 # args:
 #   -> passsword: bytes
-#   -> length   : integer
 #   -> hash_alg : string
+#   -> length   : integer
 #   -> salt     : bytes
 # returns:
 #   -> bytes
-def generate_derived_key(password, hash_alg, salt=('sec_project_4_rec').encode('utf-8')):
+def generate_derived_key(password, hash_alg, length, salt=('sec_project_4_rec').encode('utf-8'), iterations=1):
     hashing=get_hash_alg(hash_alg)
     info=('handshake').encode('utf-8')
     derivation=PBKDF2HMAC(
         algorithm=hashing,
-        length=length,
+        length=length//8,
         salt=salt,
-        info=info,
+        iterations=iterations,
         backend=default_backend()
     )
     return derivation.derive(password)
@@ -155,7 +155,7 @@ def generate_dh():
 #   -> bytes
 def generate_key_dh(private_key, peer_key, 
                     private_salt, peer_salt,
-                    length, hash_alg, n_derivations):
+                    length, hash_alg, number_of_derivations):
     secret=private_key.exchange(
         ec.ECDH(),
         peer_key
@@ -164,8 +164,8 @@ def generate_key_dh(private_key, peer_key,
     for i in range(0, number_of_derivations):
         key=generate_derived_key(
             key,
-            length,
             hash_alg,
+            length,
             private_salt+peer_salt
         )
     return key
@@ -189,7 +189,7 @@ def generate_mac(key, data, hash_alg='SHA2'):
 # returns:
 #   -> None
 def write_private_key(path, key):
-    with open(os.path.join(path, 'prv_rsa'), 'wb') as file:
+    with open(path, 'wb') as file:
         payload=key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,
@@ -202,7 +202,7 @@ def write_private_key(path, key):
 # returns:
 #   -> RSAPrivateKey
 def read_private_key(path):
-    with open(os.path.join(path, 'prv_rsa'), 'rb') as file:
+    with open(path, 'rb') as file:
         payload=serialization.load_pem_private_key(
             file.read(),
             password=None,
@@ -216,7 +216,7 @@ def read_private_key(path):
 # returns:
 #   -> None
 def write_public_key(path, key):
-    with open(os.path.join(path, 'pub_rsa'), 'wb') as file:
+    with open(path, 'wb') as file:
         payload=key.public_bytes(
             serialization.Encoding.PEM,
             serialization.PublicFormat.SubjectPublicKeyInfo
@@ -228,7 +228,7 @@ def write_public_key(path, key):
 # returns:
 #   -> RSAPublicKey
 def read_public_key(path):
-    with open(os.path.join(path, 'pub_rsa'), 'rb') as file:
+    with open(path, 'rb') as file:
         payload=serialization.load_pem_public_key(
             file.read(),
             backend=default_backend()
@@ -257,7 +257,7 @@ def sign(private_key, data, hash_alg='SHA1', padding_mode='OAEP'):
 #   -> padding_mode: string (optional)
 # returns:
 #   -> boolean
-def verify(public_key, signature, data, hash_alg='SHA1', padding_mode='PSS'):
+def verify(public_key, signature, data, hash_alg='SHA2', padding_mode='PSS'):
     hashing=get_hash_alg(hash_alg)
     padding=get_padding_mode(padding_mode, hashing)
     return public_key.verify(signature, data, padding, hashing)

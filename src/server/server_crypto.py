@@ -14,6 +14,7 @@ from pprint import pprint
 
 # crypto modules
 from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography import x509
 
 # work bibs
@@ -51,6 +52,7 @@ class CryptographyServer(object):
         #       'cipher_methods':<string|client ciphering methods>,
         #       'cc_user':<boolean|client using pt e-id>,
         #       'pbk_sent':<boolean|has client received most recent public key>
+        #       'private_dh_value': <EllipticCurvePrivateKey|server dh value for this client>
         #    }
         self.sec_clients_dict={}
         # load keystore
@@ -64,10 +66,11 @@ class CryptographyServer(object):
             security_logger.debug('*Creating keys')
             self.private_key=generate_rsa()
             write_private_key(os.path.join(KEYS_DIR,'prv_key.rsa'), self.private_key)
+            write_public_key(os.path.join(KEYS_DIR,'pub_key.rsa'), self.private_key.public_key())
         else:
             self.private_key=read_private_key(os.path.join(KEYS_DIR, 'prv_key.rsa'))
         self.public_key=self.private_key.public_key()
-        self.old_private_key=None
+        self.old_private_key=self.private_key
 
     # sign in of a user
     #   -> user can provide multiple ciphering methods
@@ -76,11 +79,11 @@ class CryptographyServer(object):
     #   -> must use CC stuff
     def sign_in(self, player_addr, payload_day_0):
         security_logger.debug('Reached sign in to player '+str(player_addr))
+
         try:
             if not set({'message', 'operation','signature','cipher_suite', 'cc_user'}).issubset(set(payload_day_0.keys())):
-                return None, {'status': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
+                return None, {'status': 'ERROR', 'error': 'wrong fields for operation client@register_player'}
             security_logger.debug('player_addr: '+str(player_addr))
-            security_logger.debug('player_payload: '+str(payload_day_0))
             # parse received args
             decoded_message=json.loads(
                 base64.b64decode(
@@ -88,7 +91,7 @@ class CryptographyServer(object):
                 ).decode()
             )
             if not set({'name','key','salt','derivations','certificate','dh_value'}).issubset(set(decoded_message.keys())):
-                return None, {'status': 'ERROR', 'error': 'wrong fields for operation player@sign_in'}
+                return None, {'status': 'ERROR', 'error': 'wrong fields in security data for operation client@register_player'}
             cipher_methods=payload_day_0['cipher_suite']
             signature=base64.b64decode(
                 payload_day_0['signature'].encode()
@@ -180,13 +183,21 @@ class CryptographyServer(object):
         )
         security_logger.debug('generating ECDH cipher and ciphering message to send')
         dh_cipher, dh_iv = generate_sym_cipher(
-            key, 
+            dh_key, 
             self.sec_clients_dict[player_addr]['cipher_methods']['sym']['mode'], 
             self.sec_clients_dict[player_addr]['cipher_methods']['sym']['algorithm']
         )
         encryptor=dh_cipher.encryptor()
+        sym_padding=PKCS7(
+            get_cipher_alg(
+                self.sec_clients_dict[player_addr]['cipher_methods']['sym']['algorithm'],
+                dh_key
+            ).block_size
+        ).padder()
         ciphered_message=encryptor.update(
-            json.dumps(message).encode()
+            sym_padding.update(
+                json.dumps(message).encode()
+            )+sym_padding.finalize()
         )+encryptor.finalize()
         security_logger.debug('generating package')
         package=base64.b64encode(
@@ -207,7 +218,7 @@ class CryptographyServer(object):
             generate_mac(
                     dh_key,
                     package,
-                    self.sec_clients_dict[player_addr]['cipher_methods']['sym']['key_size'],
+                    self.sec_clients_dict[player_addr]['cipher_methods']['hash'],
                 )
             ).decode('utf-8')
         security_logger.debug('checing if it has to send new key')
