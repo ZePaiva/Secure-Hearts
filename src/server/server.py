@@ -46,6 +46,7 @@ class SecureServer(object):
 
         # security related
         self.cryptography=CryptographyServer(log_level)
+        server_logger.debug('Cryptography UP')
 
     def accept_client(self):
         try:
@@ -78,17 +79,16 @@ class SecureServer(object):
             "nplayers":nplayers,
             "username":username
         }
-        # try:
-        #     payload = json.dumps(self.cryptography.secure_package(self.clients[conn]['address'], payload, 'server@require_action',update_public_key=True))
-        # except KeyError:
-        #     server_logger.warning("Message not encapsulated")
-        #     payload = json.dumps(payload)
-        payload = json.dumps(payload)
+        try:
+            payload = json.dumps(self.cryptography.secure_package(self.clients[conn]['address'], payload, 'server@require_action',update_public_key=True))
+        except KeyError:
+            server_logger.warning("Message not encapsulated")
+            payload = json.dumps(payload)
 
         try:
             while payload:
                 to_send=payload[:BUFFER_SIZE]
-                conn.send(to_send.encode())
+                conn.send(to_send.encode('utf-8'))
                 payload=payload[BUFFER_SIZE:]
         except OSError:
             self.delete_client(conn)
@@ -124,12 +124,23 @@ class SecureServer(object):
             operation = payload["operation"]
             # handle client connecting
             if operation=="client@register_player":
-                username=payload['username']
-                success=self.croupier.add_player(conn, addr, payload['username'])
-
+                client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
+                # client failed to pass security to log in
+                if not client:
+                    server_logger.warning('bad client tried to sign in')
+                    server_logger.debug(response)
+                    response['operation']='server@register_failed'
+                    payload=json.dumps(response)
+                    while payload:
+                        to_send=payload[:BUFFER_SIZE]
+                        conn.send(to_send.encode())
+                        payload=payload[BUFFER_SIZE:]
+                    conn.close()
+                    os._exit(0)
+                success=self.croupier.add_player(conn, addr, client['username'])
                 if success:
-                    self.clients[conn]["username"]=payload['username']
-                    self.require_action(conn, answer="server@request_crypto", success=success, username=username)
+                    self.clients[conn]["username"]=client['username']
+                    self.require_action(conn, answer="client@register_player", success=success, username=client['username'])
                     server_logger.info("Requested for cryptography data from client")                    
                 else:
                     payload = {
@@ -139,26 +150,6 @@ class SecureServer(object):
                     payload = json.dumps(payload)
                     conn.send(payload.encode())
                     server_logger.warning("Informed client that username is already taken")  
-
-            elif operation=="client@register_crypto":
-                server_logger.info('Player trying to sign in')
-                # client crypto sign in
-                client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
-                # client failed to pass security to log in
-                if not client:
-                    server_logger.warning('bad client tried to sign in')
-                    server_logger.debug(response)
-                    response['operation']='server@register_failed'
-                    response['error']='error@crypto_invalid'
-                    payload=json.dumps(response)
-                    while payload:
-                        to_send=payload[:BUFFER_SIZE]
-                        conn.send(to_send.encode())
-                        payload=payload[BUFFER_SIZE:]
-                    conn.close()
-                    exit()
-                else:
-                    self.require_action(conn, answer="client@register_player", username=self.clients[conn]["username"])                 
             # handle client disconnecting
             elif operation=="client@disconnect_client":
                 self.delete_client(conn)

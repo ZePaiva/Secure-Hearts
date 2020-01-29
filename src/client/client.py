@@ -87,29 +87,16 @@ class SecureClient:
             if not cc_on:
                 self.cc_api=None
                 username=input("Username: ")
-                payload={
-                    "operation":"client@register_player",
-                    "username":username
-                }
-                payload=json.dumps(payload)
                 try:
-                    # while payload:
-                    #     payload=payload[:BUFFER_SIZE]
-                    #     self.sock.send(to_send.encode())
-                    #     payload=payload[BUFFER_SIZE:]
-                    self.sock.send(payload.encode())
                     client_logger.info("Trying to register player with username " + str(username))
-
                     # let's assume that the username is always correct
                     # or in other words, it isn't taken by other player
                     self.username = username
                     self.cc_cert=generate_certificate(self.username)[0]
                     client_logger.info("Generated CC certificate")
-
                 except:
                     traceback.print_exc()
                     client_logger.warning("Player couldn't register")
-
             # in case of using cc
             else:
                 try:
@@ -140,11 +127,7 @@ class SecureClient:
                 except Exception as e:
                     print()
                     pass
-
-
-
             keys_dir=os.path.join(KEYS_DIR,str(self.username))
-                   
             client_logger.info('Loading keys')
             if not os.path.exists(keys_dir):
                 # handling creation and storage of keys
@@ -157,29 +140,37 @@ class SecureClient:
             else:
                 rsa_private_key=read_private_key(os.path.join(keys_dir,'prv_rsa'))
                 client_logger.debug('Loaded private key from ' + keys_dir)
-            
             server_key=read_public_key(os.path.join(SERVER_KEY,'pub_rsa'))
-
             # create secure client
             self.security_handler=CryptographyClient(self.log_level,
                                                     rsa_private_key, rsa_private_key.public_key(),
                                                     server_key, cipher_methods, 
                                                     log_time,
-                                                    cc_on, self.cc_cert, self.cc_api)
-
-            
-
+                                                    cc_on, self.cc_cert, self.cc_api
+                                                    )
+            client_logger.debug('Cryptography UP')
+            first_package=json.dumps(
+                self.security_handler.secure_init_message(self.username)
+            )
+            client_logger.debug('first message sent successfully')
+            try:
+                while first_package:
+                    to_send=first_package[:BUFFER_SIZE]
+                    self.sock.send(to_send.encode())
+                    first_package=first_package[BUFFER_SIZE:]
+            except OSError:
+                self.delete_client(conn)
+                client_logger.warning("Connection to server was closed")
         except KeyboardInterrupt:
             client_logger.info("Disconnected")
             payload={
                 "operation":"client@disconnect_client"
             }
+            payload=json.dumps(payload)
             while payload:
                 to_send=payload[:BUFFER_SIZE]
                 self.sock.send(to_send.encode())
                 payload=payload[BUFFER_SIZE:]
-            payload=json.dumps(payload)
-            self.sock.send(payload.encode())
             self.exit()
 
     def connect(self):
@@ -192,33 +183,35 @@ class SecureClient:
 
     # debugs data if it has several payloads in it
     def debug_data(self, data):
-        d = ((bytes)(data)).split(b'}{')
+        d = data.split('}{')
         if(len(d) > 1):
             for i in range(0, len(d)):
                 if(i % 2 == 0):
-                    d[i] += b'}'
+                    d[i] += '}'
                 else:
-                    d[i] = b'{' + d[i]
+                    d[i] = '{' + d[i]
         return d
 
     def player_handler(self):
         self.register_player()
         while 1:
             try:
-                data = self.sock.recv(BUFFER_SIZE)
-             
+                try:
+                    data=self.sock.recv(BUFFER_SIZE).decode('utf-8')
+                except ConnectionResetError: # connection was reseted
+                    self.delete_client(conn)
+                    break
+                except OSError: # connection was closed
+                    self.delete_client(conn)
+                    break
                 if not data:
                     break
-                    
                 debugged = self.debug_data(data)
                 for d in debugged:
                     payload = json.loads(d)
                     operation = payload["operation"]
                     if(operation == "server@require_action"):
-                        
-                        # payload=self.security_handler.server_parse_security(payload)
-                        
-                        # handle client trial to create table
+                        payload=self.security_handler.server_parse_security(payload)
                         if(payload["answer"] == "player@request_create_table"):
                             if(payload["success"]):
                                 self.player.owner = True
@@ -230,31 +223,12 @@ class SecureClient:
                                 client_logger.warning("To leave the table, please press CTRL-C")
                             else:
                                 client_logger.warning("Player didn't create table " + str(payload["table"]))
-                        
                         # handle client trial to register
                         elif(payload["answer"] == "client@register_player"):
                             self.username=payload["username"]
                             client_logger.info("Player username: " + str(payload["username"]))
-                           
                             self.player=Player(payload["username"])
                             client_logger.info("Player registered")
-
-                        elif(payload["answer"] == "server@request_crypto"):
-                            client_logger.warning("In server@request_crypto")
-                            first_package=json.dumps(
-                                self.security_handler.secure_init_message(self.username)
-                            )
-                            try:
-                                while first_package:
-                                    client_logger.info("Sending first_package")
-                                    to_send=first_package[:BUFFER_SIZE]
-                                    self.sock.send(to_send.encode())
-                                    first_package=first_package[BUFFER_SIZE:]
-                            except OSError:
-                                self.delete_client(conn)
-                                client_logger.warning("Connection to server was closed")
-
-
                         # handle client trial to delete table
                         elif(payload["answer"] == "player@request_delete_table"):
                             if(payload["success"]):

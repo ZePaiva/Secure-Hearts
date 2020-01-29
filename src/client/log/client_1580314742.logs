@@ -1,0 +1,21 @@
+16:19:02 - CLIENT - INFO - Connected
+16:19:02 - CLIENT - DEBUG - logging new client, process started
+16:19:03 - CLIENT - DEBUG - CC - False
+16:19:04 - CLIENT - INFO - Trying to register player with username asdfg
+16:19:04 - CLIENT - INFO - Generated CC certificate
+16:19:05 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PSS', 'hashing': 'SHA2'}}}
+16:19:05 - CLIENT - INFO - Loading keys
+16:19:05 - CLIENT - DEBUG - Stored private key @ /home/zero/Documents/UniAv/4_ano/SEG/Project/security1920-g22/src/client/keys/asdfg
+16:19:05 - CLIENT - DEBUG - Stored public key @ /home/zero/Documents/UniAv/4_ano/SEG/Project/security1920-g22/src/client/keys/asdfg
+16:19:05 - CLIENT - DEBUG - Cryptography UP
+16:19:05 - SECURITY - DEBUG - Generating ECDH key pair
+16:19:05 - SECURITY - DEBUG - Generating salt
+16:19:05 - SECURITY - DEBUG - creating first message
+16:19:05 - SECURITY - DEBUG - signing first message
+16:19:05 - SECURITY - DEBUG - packaging first message
+16:19:05 - SECURITY - DEBUG - first package received
+16:19:05 - CLIENT - DEBUG - first message sent successfully
+16:19:05 - SECURITY - DEBUG - generating ECDH cipher and deciphering message to send
+16:19:05 - SECURITY - WARNING - server signaled an update to it's public key, trialing with old key signature
+16:19:05 - SECURITY - DEBUG - finished process of deciphering message
+16:19:52 - CLIENT - INFO - Disconnected

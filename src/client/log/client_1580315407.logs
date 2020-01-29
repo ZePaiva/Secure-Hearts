@@ -1,0 +1,22 @@
+16:30:07 - CLIENT - INFO - Connected
+16:30:07 - CLIENT - DEBUG - logging new client, process started
+16:30:08 - CLIENT - DEBUG - CC - False
+16:30:09 - CLIENT - INFO - Trying to register player with username adsf
+16:30:09 - CLIENT - INFO - Generated CC certificate
+16:30:11 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PSS', 'hashing': 'SHA2'}}}
+16:30:11 - CLIENT - INFO - Loading keys
+16:30:11 - CLIENT - DEBUG - Loaded private key from /home/zero/Documents/UniAv/4_ano/SEG/Project/security1920-g22/src/client/keys/adsf
+16:30:11 - CLIENT - DEBUG - Cryptography UP
+16:30:11 - SECURITY - DEBUG - Generating ECDH key pair
+16:30:11 - SECURITY - DEBUG - Generating salt
+16:30:11 - SECURITY - DEBUG - creating first message
+16:30:11 - SECURITY - DEBUG - signing first message
+16:30:11 - SECURITY - DEBUG - packaging first message
+16:30:11 - SECURITY - DEBUG - first package received
+16:30:11 - CLIENT - DEBUG - first message sent successfully
+16:30:11 - SECURITY - DEBUG - generating ECDH cipher and deciphering message to send
+16:30:11 - SECURITY - WARNING - server signaled an update to it's public key, trialing with old key signature
+16:30:11 - SECURITY - DEBUG - finished process of deciphering message
+16:30:11 - CLIENT - INFO - Player username: adsf
+16:30:11 - CLIENT - INFO - Player registered
+16:30:24 - CLIENT - INFO - Exiting...

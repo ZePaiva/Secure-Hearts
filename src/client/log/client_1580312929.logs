@@ -1,0 +1,11 @@
+15:48:49 - CLIENT - INFO - Connected
+15:48:49 - CLIENT - DEBUG - logging new client, process started
+15:48:50 - CLIENT - DEBUG - CC - True
+15:48:51 - CLIENT - DEBUG - cc api UP
+15:48:52 - CLIENT - DEBUG - cert: <Certificate(subject=<Name(C=PT,O=Cartão de Cidadão,OU=Cidadão Português,OU=Autenticação do Cidadão,2.5.4.4=PINHO PAIVA,2.5.4.42=JOSÉ MIGUEL,2.5.4.5=BI145291472,CN=JOSÉ MIGUEL PINHO PAIVA)>, ...)>
+15:48:52 - CLIENT - DEBUG - username: JOSÉ MIGUEL PINHO PAIVA
+15:48:52 - CLIENT - DEBUG - CC ID: BI145291472
+15:48:54 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PKCS1v15', 'hashing': 'SHA2'}}}
+15:48:54 - CLIENT - INFO - Loading keys
+15:48:54 - CLIENT - DEBUG - Loaded private key from /home/zero/Documents/UniAv/4_ano/SEG/Project/security1920-g22/src/client/keys/JOSÉ MIGUEL PINHO PAIVA
+15:49:04 - CLIENT - INFO - Exiting...

@@ -95,7 +95,7 @@ class CryptographyClient(object):
         # creating package
         sec_logger.debug('packaging first message')
         package={
-            'operation': 'client@register_crypto',
+            'operation': 'client@register_player',
             'message': prep.decode('utf-8'),
             'signature': signature,
             'cipher_suite': self.cipher_methods,
