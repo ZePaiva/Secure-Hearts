@@ -258,6 +258,12 @@ class CryptographyClient(object):
                 secure_package['package'].encode()
             ).decode('utf-8')
         )
+        if not set({'security_data','message'}).issubset(set(package.keys())):
+            sec_logger.warning('incomplete message received from server')
+            return {'operation': 'ERROR', 'error': 'incomplete message'}
+        if not set({'dh_public_value','salt','iv','derivation'}).issubset(set(package['security_data'].keys())):
+            sec_logger.warning('incomplete message received from server')
+            return {'operation': 'ERROR', 'error': 'incomplete message'}
         # Derive key and decipher payload
         salt=self.derivations['server']-1
         self.other_public_value['server']=deserialize_key(package['security_data']['dh_public_value'])
@@ -282,30 +288,26 @@ class CryptographyClient(object):
             )
         )
         # Decipher message
-        if 'message' in package:
-            decryptor=dh_cipher.decryptor()
-            sym_padding=PKCS7(
-                get_cipher_alg(
-                    self.cipher_methods['sym']['algorithm'],
-                    dh_key
-                ).block_size
-            ).unpadder()
-            message=sym_padding.update(
-                decryptor.update(
-                    base64.b64decode(
-                        package['message'].encode('utf-8')
-                    )
-                )+decryptor.finalize()
-            )+sym_padding.finalize()
-            message=json.loads(message.decode('utf-8'))
-        else:
-            sec_logger.info('received message without content from server')
-            return {'type': 'error', 'error': "no content"}
+        decryptor=dh_cipher.decryptor()
+        sym_padding=PKCS7(
+            get_cipher_alg(
+                self.cipher_methods['sym']['algorithm'],
+                dh_key
+            ).block_size
+        ).unpadder()
+        message=sym_padding.update(
+            decryptor.update(
+                base64.b64decode(
+                    package['message'].encode('utf-8')
+                )
+            )+decryptor.finalize()
+        )+sym_padding.finalize()
+        message=json.loads(message.decode('utf-8'))
         # check if server has new public key
         if set({'signature','public_key'}).issubset(set(secure_package.keys())):
             sec_logger.warning('server signaled an update to it\'s public key, trialing with old key signature')
             signature=base64.b64decode(
-                secure_package['signature'].encode()
+                secure_package['signature'].encode('utf-8')
             )
             try:
                 valid_sign=verify(
@@ -415,6 +417,7 @@ class CryptographyClient(object):
             self.derivations.update({sender_user: tunnel_day_0['derivations']})
             self.other_salts.update({sender_user: base64.b64decode(tunnel_day_0['salt'].encode())})
             security_logger.info('new tunnel established validated, ready to accept')
+            return {'status': 'success'}
         except Exception as e:
             security_logger.exception('Exception '+str(e)+' @ player_sign_in')
         return None
@@ -521,4 +524,72 @@ class CryptographyClient(object):
         return safe_message
 
     # deciphers message from user, after creation of tunnel
-    def tunnne_parse_security(self, target_user, package):
+    def tunnnel_parse_security(self, sender_user, package, cipher_methods):
+        sec_logger.debug('Parsing data from client %s', sender_user)
+        if not set({'security_data','message'}).issubset(set(package.keys())):
+            sec_logger.warning('incomplete message received from server')
+            return {'operation': 'ERROR', 'error': 'incomplete message'}
+        if not set({'dh_public_value','salt','iv','derivation','signature'}).issubset(set(package['security_data'].keys())):
+            sec_logger.warning('incomplete message received from server')
+            return {'operation': 'ERROR', 'error': 'incomplete message'}
+        if sender_user not in other_public_value.keys():
+            sec_logger.warning('no tunnel established with client %s', sender_user)
+            return {'operation': 'ERROR', 'error': 'no tunnel'}
+        # check signature
+        signature=base64.b64decode(
+            package['security_data']['signature'].encode('utf-8')
+        )
+        try:
+            valid_sign=verify(
+                self.other_public_key[sender_user],
+                signature,
+                secure_package['package'].encode('utf-8'),
+                hash_alg=cipher_methods['asym']['sign']['hashing'],
+                padding_mode=cipher_methods['asym']['sign']['padding']
+            )
+        except InvalidSignature:
+            sec_logger.debug('Received invalid signature from server, discarding this package')
+            return {'status': 'error', 'error': 'Bad signature'}
+        # Derive key and decipher payload
+        sec_logger.debug('generating key')
+        salt=self.derivations[sender_user]-1
+        self.other_public_value[sender_user]=deserialize_key(package['security_data']['dh_public_value'])
+        self.other_salts[sender_user]=base64.b64decode(package['security_data']['salt'].encode('utf-8'))
+        dh_key = generate_key_dh(
+            self.private_value,
+            self.other_public_value[sender_user], 
+            self.other_salts[sender_user],
+            self.salt_dict[sender_user][salt],
+            cipher_methods['sym']['key_size'],
+            cipher_methods['hash'],
+            self.derivations[sender_user],
+        )
+        # Decipher secure package
+        sec_logger.debug('generating ECDH cipher and deciphering message to send')
+        dh_cipher, dh_iv = generate_sym_cipher(
+            dh_key, 
+            cipher_methods['sym']['mode'], 
+            cipher_methods['sym']['algorithm'],
+            base64.b64decode(
+                package['security_data']['iv'].encode('utf-8')
+            )
+        )
+        # Decipher message
+        decryptor=dh_cipher.decryptor()
+        sym_padding=PKCS7(
+            get_cipher_alg(
+                cipher_methods['sym']['algorithm'],
+                dh_key
+            ).block_size
+        ).unpadder()
+        message=sym_padding.update(
+            decryptor.update(
+                base64.b64decode(
+                    package['message'].encode('utf-8')
+                )
+            )+decryptor.finalize()
+        )+sym_padding.finalize()
+        message=json.loads(message.decode('utf-8'))
+        sec_logger.debug('finished process of deciphering message')
+        return message
+
