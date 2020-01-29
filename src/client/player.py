@@ -99,7 +99,7 @@ class Player:
         conn.send(payload.encode())
         player_logger.info("Requested online tables")
 
-    def request_online_users(self, conn):
+    def request_online_users(self, conn, security):
         payload = {
             "operation":"player@request_online_users",
             "username":self.username
