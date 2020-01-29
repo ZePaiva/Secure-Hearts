@@ -40,20 +40,19 @@ def main():
     else:
         TABLES=4
 
-    while True:
+    
+    try:
+       sec_server=SecureServer(SERV, PORT, LOG, TABLES)
+       sec_server.run()
+    except KeyboardInterrupt as e:
         try:
-           sec_server=SecureServer(SERV, PORT, LOG, TABLES)
-           sec_server.run()
+            sec_server.pause()
         except KeyboardInterrupt as e:
-            try:
-                sec_server.pause()
-            except KeyboardInterrupt as e:
-                sec_server.exit()
-                break
-        except Exception as e:
-            if sec_server is not (None):
-                sec_server.emergency_exit(e)
-            exit(1)
+            sec_server.exit()
+    except Exception as e:
+        if sec_server is not (None):
+            sec_server.emergency_exit(e)
+        exit(1)
 
 if __name__=="__main__":
     main()
