@@ -27,7 +27,7 @@ server_logger=logging.getLogger('SERVER')
 BUFFER_SIZE=512*1024
 
 class SecureServer(object):
-    def __init__(self, host='0.0.0.0', port=8080, log_level='INFO', tables=4):
+    def __init__(self, host='0.0.0.0', port=8080, log_level='DEBUG', tables=4):
         # logging
         coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
         self.tables=tables
@@ -38,7 +38,6 @@ class SecureServer(object):
         self.sock.bind((host,port))
         self.sock.listen(4*self.tables)
         server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
-        server_logger.debug('server up, can support up to '+str(tables)+' and '+str(4*tables)+' players')
 
         # game related
         self.clients = {}
@@ -47,7 +46,6 @@ class SecureServer(object):
 
         # security related
         self.cryptography=CryptographyServer(log_level)
-        server_logger.debug('Cryptography server UP')
 
     def accept_client(self):
         try:
@@ -80,7 +78,13 @@ class SecureServer(object):
             "nplayers":nplayers,
             "username":username
         }
-        payload = json.dumps(self.cryptography.secure_package(self.clients[conn]['address'], payload, 'server@require_action',update_public_key=True))
+        # try:
+        #     payload = json.dumps(self.cryptography.secure_package(self.clients[conn]['address'], payload, 'server@require_action',update_public_key=True))
+        # except KeyError:
+        #     server_logger.warning("Message not encapsulated")
+        #     payload = json.dumps(payload)
+        payload = json.dumps(payload)
+
         try:
             while payload:
                 to_send=payload[:BUFFER_SIZE]
@@ -104,7 +108,7 @@ class SecureServer(object):
     def communication_thread(self, conn, addr):
         while 1:
             try:
-                data=conn.recv(BUFFER_SIZE).decode('utf-8')
+                data=conn.recv(BUFFER_SIZE)
             except ConnectionResetError: # connection was reseted
                 self.delete_client(conn)
                 break
@@ -120,7 +124,24 @@ class SecureServer(object):
             operation = payload["operation"]
             # handle client connecting
             if operation=="client@register_player":
-                server_logger.debug('Player trying to sign in')
+                username=payload['username']
+                success=self.croupier.add_player(conn, addr, payload['username'])
+
+                if success:
+                    self.clients[conn]["username"]=payload['username']
+                    self.require_action(conn, answer="server@request_crypto", success=success, username=username)
+                    server_logger.info("Requested for cryptography data from client")                    
+                else:
+                    payload = {
+                        "operation":"server@register_failed",
+                        "error":"error@username_taken"
+                    }
+                    payload = json.dumps(payload)
+                    conn.send(payload.encode())
+                    server_logger.warning("Informed client that username is already taken")  
+
+            elif operation=="client@register_crypto":
+                server_logger.info('Player trying to sign in')
                 # client crypto sign in
                 client,response=self.cryptography.sign_in(self.clients[conn]['address'], payload)
                 # client failed to pass security to log in
@@ -128,6 +149,7 @@ class SecureServer(object):
                     server_logger.warning('bad client tried to sign in')
                     server_logger.debug(response)
                     response['operation']='server@register_failed'
+                    response['error']='error@crypto_invalid'
                     payload=json.dumps(response)
                     while payload:
                         to_send=payload[:BUFFER_SIZE]
@@ -135,22 +157,8 @@ class SecureServer(object):
                         payload=payload[BUFFER_SIZE:]
                     conn.close()
                     exit()
-                # if client passed security for log in add him to database
-                username=client['username']
-                success=self.croupier.add_player(conn, addr, client['username'])
-
-                if success:
-                    self.clients[conn]["username"]=client['username']
-                    server_logger.info("Player " + username + " joined the server")
-                    server_logger.info("Sent a message to " + username + " to require an action")
-                    self.require_action(conn, answer=operation, success=success, username=username)
                 else:
-                    payload = {
-                        "operation":"server@register_failed"
-                    }
-                    payload = json.dumps(payload)
-                    conn.send(payload.encode())
-                    server_logger.warning("Informed client that username is already taken")                   
+                    self.require_action(conn, answer="client@register_player", username=self.clients[conn]["username"])                 
             # handle client disconnecting
             elif operation=="client@disconnect_client":
                 self.delete_client(conn)
@@ -185,15 +193,22 @@ class SecureServer(object):
                     nplayers = self.croupier.tables[payload["table"]]["nplayers"]
                     self.require_action(conn, answer=operation, success=success, table=payload["table"], nplayers=nplayers) 
                 else:
+                    # game has started
                     connections = success
                     nplayers = self.croupier.tables[payload["table"]]["nplayers"]
                     # send information about game starting
                     for connection in connections:
                         self.require_action(connection, answer="player@game_start", success=1, mode="in-game", table=payload["table"], nplayers=nplayers)
                         server_logger.info("Sent information about the starting of the game to " + self.croupier.get_username(connection))
-                    # shuffle player order
-                    # send order to respective player
-                    server_logger.info("Game started at table " + payload["table"])
+                    
+                    # send cards to the first player in the queue (table's order)
+                    player_order = self.croupier.tables[payload["table"]]["order"]
+                    connection = self.croupier.players_conn[player_order[0]] 
+                    # increment distribution idx
+                    self.croupier.tables[payload["table"]]["cards_dist_idx"] += 1
+                    print("PAYLOAD TABLE: " + str(payload["table"]))
+                    self.croupier.give_shuffled_cards(payload["table"], connection)
+                                        
             # handling client asking to leave table
             elif operation=="player@request_leave_table":
                 success = self.croupier.remove_player_table(payload, conn)
@@ -205,6 +220,19 @@ class SecureServer(object):
             elif operation=="player@request_leave_croupier":
                 self.delete_client(conn)
                 break
+
+            # player returns the shuffled cards
+            elif operation=="player@return_shuffled_cards":
+                idx = self.croupier.tables[payload["table"]]["cards_dist_idx"]
+
+                if(idx != 0): # if distribution isn't complete
+                    player_order = self.croupier.tables[payload["table"]]["order"]
+                    connection = self.croupier.players_conn[player_order[idx]]
+                    self.croupier.give_shuffled_cards(payload["table"], connection)
+                    # update table order idx
+                    self.croupier.tables[payload["table"]]["cards_dist_idx"] = (idx + 1) % 4
+                else:
+                    server_logger.warning("DISTRIBUTION OF DECKS COMPLETED")
 
     def run(self):
         while True:

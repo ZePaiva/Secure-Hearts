@@ -33,7 +33,7 @@ security_logger=logging.getLogger('SECURITY')
 
 # cryptography actions for the game
 class CryptographyServer(object):
-    def __init__(self, logLevel='INFO'):
+    def __init__(self, logLevel='DEBUG'):
         # logging
         coloredlogs.install(level=logLevel, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=log_colors)
         security_logger.debug('Got security')
@@ -79,7 +79,6 @@ class CryptographyServer(object):
     #   -> must use CC stuff
     def sign_in(self, player_addr, payload_day_0):
         security_logger.debug('Reached sign in to player '+str(player_addr))
-
         try:
             if not set({'message', 'operation','signature','cipher_suite', 'cc_user'}).issubset(set(payload_day_0.keys())):
                 return None, {'status': 'ERROR', 'error': 'wrong fields for operation client@register_player'}

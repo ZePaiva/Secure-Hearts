@@ -33,7 +33,7 @@ def main():
     if args['logLevel']:
         LOG=args['logLevel']
     else:
-        LOG='INFO'
+        LOG='DEBUG'
 
     if args['tables']:
         TABLES=args['tables']
