@@ -2,6 +2,7 @@ import os
 import base64
 import logging
 import json
+import binascii
 
 from utils.sec_utils import *
 from utils.certificates_utils import *
@@ -45,7 +46,9 @@ class CryptographyClient(object):
         self.derivations={'server':1}
         self.salt_dict={}             # used to store server and other clients salts
         self.prev_mac=None
-
+        self.commit_v1=None
+        self.commit_v2=None
+        self.hand_committed=None
     # send the first message
     # message has format: 
     # {
@@ -577,4 +580,22 @@ class CryptographyClient(object):
         message=json.loads(message.decode('utf-8'))
         sec_logger.debug('finished process of deciphering message')
         return message
+
+    # generate bit commitment
+    def gen_bit_commitment(self, hand):
+        sec_logger.debug('creating bit commitment')
+        # generate random values
+        self.commit_v1=os.urandom(16)
+        self.commit_v2=os.urandom(16)
+        hasher=get_hash_alg(self.cipher_methods['hashing'])
+        hand=sorted(hand)
+        self.hand_committed=hand
+        for card in hand:
+            hasher.update(card.encode('utf-8'))
+        bit_commit=binascii.hexlify(hasher.finalize())
+        sec_logger.debug('bit commitment generated')
+        return bit_commit
+
+    # secure deck
+    def secure_deck(self, )
 
