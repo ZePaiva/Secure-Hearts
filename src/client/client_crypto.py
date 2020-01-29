@@ -33,9 +33,9 @@ class CryptographyClient(object):
             self.cc_cert=cert
 
         # security stuff
-        self.private_value=None                              # ephemeral private key
+        self.private_value=None                              # ephemeral private key (ECDH)
         self.old_private_key=None                            # needed to alter key in runtime
-        self.public_value=None                               # ephemeral public key but it could be bread if coding was communist
+        self.public_value=None                               # ephemeral public key (ECDH) but it could be bread if coding was communist
         self.users_private_values={}
         self.users_public_values={}
         self.other_public_value={'server':None}              # also bread if communist
@@ -149,12 +149,10 @@ class CryptographyClient(object):
             json.dumps(
                 {
                     'message': base64.b64encode(ciphered_message).decode('utf-8'),
-                    'security_data': {
-                        'dh_public_value': serialize_key(self.public_value),
-                        'salt': base64.b64encode(salt).decode('utf-8'),
-                        'iv': base64.b64encode(dh_iv).decode('utf-8'),
-                        'derivation': self.derivations['server']
-                    }
+                    'dh_public_value': serialize_key(self.public_value),
+                    'salt': base64.b64encode(salt).decode('utf-8'),
+                    'iv': base64.b64encode(dh_iv).decode('utf-8'),
+                    'derivation': self.derivations['server']
                 }
             ).encode('utf-8')
         )
@@ -212,13 +210,10 @@ class CryptographyClient(object):
     #   'package': (base64encoded-encoded) 
     #       {
     #           'message': <decoded-base64encoded-ciphertext>,
-    #           'security_data':
-    #               {
-    #                   'dh_public_value': <serialized_public_key>,
-    #                   'salt': <decoded-base64encoded-bytes>,
-    #                   'iv': <decoded-base64encoded-bytes>,
-    #                   'derivation': <integer>
-    #               }
+    #           'dh_public_value': <serialized_public_key>,
+    #           'salt': <decoded-base64encoded-bytes>,
+    #           'iv': <decoded-base64encoded-bytes>,
+    #           'derivation': <integer>
     #       }
     # }
     def server_parse_security(self, secure_package):
@@ -258,16 +253,13 @@ class CryptographyClient(object):
                 secure_package['package'].encode()
             ).decode('utf-8')
         )
-        if not set({'security_data','message'}).issubset(set(package.keys())):
-            sec_logger.warning('incomplete message received from server')
-            return {'operation': 'ERROR', 'error': 'incomplete message'}
-        if not set({'dh_public_value','salt','iv','derivation'}).issubset(set(package['security_data'].keys())):
+        if not set({'dh_public_value','salt','iv','derivation','message'}).issubset(set(package.keys())):
             sec_logger.warning('incomplete message received from server')
             return {'operation': 'ERROR', 'error': 'incomplete message'}
         # Derive key and decipher payload
         salt=self.derivations['server']-1
-        self.other_public_value['server']=deserialize_key(package['security_data']['dh_public_value'])
-        self.other_salts['server']=base64.b64decode(package['security_data']['salt'].encode('utf-8'))
+        self.other_public_value['server']=deserialize_key(package['dh_public_value'])
+        self.other_salts['server']=base64.b64decode(package['salt'].encode('utf-8'))
         dh_key = generate_key_dh(
             self.private_value,
             self.other_public_value['server'], 
@@ -284,7 +276,7 @@ class CryptographyClient(object):
             self.cipher_methods['sym']['mode'], 
             self.cipher_methods['sym']['algorithm'],
             base64.b64decode(
-                package['security_data']['iv'].encode('utf-8')
+                package['iv'].encode('utf-8')
             )
         )
         # Decipher message
@@ -496,27 +488,23 @@ class CryptographyClient(object):
         if update_public_key:
             message = {
                 'message': base64.b64encode(ciphered_message).decode('utf-8'),
-                'security_data': {
-                    'dh_public_value': serialize_key(self.public_value),
-                    'salt': base64.b64encode(salt).decode('utf-8'),
-                    'iv': base64.b64encode(dh_iv).decode('utf-8'),
-                    'derivation': self.derivations[target_user],
-                    'mac': mac,
-                    'public_key': self.public_key,
-                    'signature':signature
-                }
+                'dh_public_value': serialize_key(self.public_value),
+                'salt': base64.b64encode(salt).decode('utf-8'),
+                'iv': base64.b64encode(dh_iv).decode('utf-8'),
+                'derivation': self.derivations[target_user],
+                'mac': mac,
+                'public_key': self.public_key,
+                'signature':signature
             }
         else:
             message = {
                 'message': base64.b64encode(ciphered_message).decode('utf-8'),
-                'security_data': {
-                    'dh_public_value': serialize_key(self.public_value),
-                    'salt': base64.b64encode(salt).decode('utf-8'),
-                    'iv': base64.b64encode(dh_iv).decode('utf-8'),
-                    'derivation': self.derivations[target_user],
-                    'mac':mac,
-                    'signature':signature
-                }
+                'dh_public_value': serialize_key(self.public_value),
+                'salt': base64.b64encode(salt).decode('utf-8'),
+                'iv': base64.b64encode(dh_iv).decode('utf-8'),
+                'derivation': self.derivations[target_user],
+                'mac':mac,
+                'signature':signature
             }
         safe_message=self.server_secure_package(message, 'player@sending_secure_message')
         safe_message['target_user']=target_user
@@ -526,10 +514,7 @@ class CryptographyClient(object):
     # deciphers message from user, after creation of tunnel
     def tunnnel_parse_security(self, sender_user, package, cipher_methods):
         sec_logger.debug('Parsing data from client %s', sender_user)
-        if not set({'security_data','message'}).issubset(set(package.keys())):
-            sec_logger.warning('incomplete message received from server')
-            return {'operation': 'ERROR', 'error': 'incomplete message'}
-        if not set({'dh_public_value','salt','iv','derivation','signature'}).issubset(set(package['security_data'].keys())):
+        if not set({'dh_public_value','salt','iv','derivation','mac','signature','message'}).issubset(set(package.keys())):
             sec_logger.warning('incomplete message received from server')
             return {'operation': 'ERROR', 'error': 'incomplete message'}
         if sender_user not in other_public_value.keys():
@@ -537,7 +522,7 @@ class CryptographyClient(object):
             return {'operation': 'ERROR', 'error': 'no tunnel'}
         # check signature
         signature=base64.b64decode(
-            package['security_data']['signature'].encode('utf-8')
+            package['signature'].encode('utf-8')
         )
         try:
             valid_sign=verify(
@@ -553,8 +538,8 @@ class CryptographyClient(object):
         # Derive key and decipher payload
         sec_logger.debug('generating key')
         salt=self.derivations[sender_user]-1
-        self.other_public_value[sender_user]=deserialize_key(package['security_data']['dh_public_value'])
-        self.other_salts[sender_user]=base64.b64decode(package['security_data']['salt'].encode('utf-8'))
+        self.other_public_value[sender_user]=deserialize_key(package['dh_public_value'])
+        self.other_salts[sender_user]=base64.b64decode(package['salt'].encode('utf-8'))
         dh_key = generate_key_dh(
             self.private_value,
             self.other_public_value[sender_user], 
@@ -571,7 +556,7 @@ class CryptographyClient(object):
             cipher_methods['sym']['mode'], 
             cipher_methods['sym']['algorithm'],
             base64.b64decode(
-                package['security_data']['iv'].encode('utf-8')
+                package['iv'].encode('utf-8')
             )
         )
         # Decipher message

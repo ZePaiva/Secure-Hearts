@@ -155,13 +155,10 @@ class CryptographyServer(object):
     #   'package': (base64encoded-encoded) 
     #       {
     #           'message': <decoded-base64encoded-ciphertext>,
-    #           'security_data':
-    #               {
-    #                   'dh_public_value': <serialized_public_key>,
-    #                   'salt': <decoded-base64encoded-bytes>,
-    #                   'iv': <decoded-base64encoded-bytes>,
-    #                   'derivation': <integer>
-    #               }
+    #           'dh_public_value': <serialized_public_key>,
+    #           'salt': <decoded-base64encoded-bytes>,
+    #           'iv': <decoded-base64encoded-bytes>,
+    #           'derivation': <integer>
     #       }
     # }
     def secure_package(self, player_addr, message, operation, update_public_key=False):
@@ -203,12 +200,10 @@ class CryptographyServer(object):
             json.dumps(
                 {
                     'message': base64.b64encode(ciphered_message).decode('utf-8'),
-                    'security_data': {
-                        'dh_public_value': serialize_key(self.sec_clients_dict[player_addr]['private_dh_value'].public_key()),
-                        'salt': base64.b64encode(self.sec_clients_dict[player_addr]['salt']).decode('utf-8'),
-                        'iv': base64.b64encode(dh_iv).decode('utf-8'),
-                        'derivation': self.sec_clients_dict[player_addr]['derivations']
-                    }
+                    'dh_public_value': serialize_key(self.sec_clients_dict[player_addr]['private_dh_value'].public_key()),
+                    'salt': base64.b64encode(self.sec_clients_dict[player_addr]['salt']).decode('utf-8'),
+                    'iv': base64.b64encode(dh_iv).decode('utf-8'),
+                    'derivation': self.sec_clients_dict[player_addr]['derivations']
                 }
             ).encode('utf-8')
         )
@@ -261,13 +256,10 @@ class CryptographyServer(object):
     #   'package': (base64encoded-encoded) 
     #       {
     #           'message': <decoded-base64encoded-ciphertext>,
-    #           'security_data':
-    #               {
-    #                   'dh_public_value': <serialized_public_key>,
-    #                   'salt': <decoded-base64encoded-bytes>,
-    #                   'iv': <decoded-base64encoded-bytes>,
-    #                   'derivation': <integer>
-    #               }
+    #           'dh_public_value': <serialized_public_key>,
+    #           'salt': <decoded-base64encoded-bytes>,
+    #           'iv': <decoded-base64encoded-bytes>,
+    #           'derivation': <integer>
     #       }
     # }
     def parse_security(self, player_addr, secure_package):
@@ -284,10 +276,13 @@ class CryptographyServer(object):
                 message['package'].encode()
             ).decode('utf-8')
         )
+        if not set({'dh_public_value','salt','iv','derivation','message'}).issubset(set(package.keys())):
+            sec_logger.warning('incomplete message received from server')
+            return {'operation': 'ERROR', 'error': 'incomplete message'}
         # Derive key and decipher payload
-        self.sec_clients_dict[player_addr]['derivations']=payload['security_data']['derivation']
-        self.sec_clients_dict[player_addr]['client_public_value']=deserialize_key(payload['security_data']['dh_public_value'])
-        self.sec_clients_dict[player_addr]['client_salt']=base64.b64decode(payload['security_data']['salt'].encode())
+        self.sec_clients_dict[player_addr]['derivations']=payload['derivation']
+        self.sec_clients_dict[player_addr]['client_public_value']=deserialize_key(payload['dh_public_value'])
+        self.sec_clients_dict[player_addr]['client_salt']=base64.b64decode(payload['salt'].encode())
         dh_key = generate_key_dh(
             self.sec_clients_dict[player_addr]['private_dh_value'],
             self.sec_clients_dict[player_addr]['client_dh_value'],
@@ -314,7 +309,7 @@ class CryptographyServer(object):
             base64.b64decode(
                 base64.b64decode(
                     package
-                )['security_data']['iv'].encode('utf-8')
+                )['iv'].encode('utf-8')
             )
         )
         # Decipher message
