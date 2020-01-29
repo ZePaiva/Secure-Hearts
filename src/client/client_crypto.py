@@ -354,8 +354,8 @@ class CryptographyClient(object):
                 sign(
                     self.prv_key, 
                     prep, 
-                    'SHA3',
-                    'PSS'
+                    hash_alg=self.cipher_methods['asym']['sign']['hashing'],
+                    padding_mode=self.cipher_methods['asym']['sign']['padding']
                 )
             ).decode('utf-8')
         # securing package to server
