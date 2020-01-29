@@ -33,7 +33,7 @@ security_logger=logging.getLogger('SECURITY')
 
 # cryptography actions for the game
 class CryptographyServer(object):
-    def __init__(self, logLevel='INFO'):
+    def __init__(self, logLevel='DEBUG'):
         # logging
         coloredlogs.install(level=logLevel, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=log_colors)
         security_logger.debug('Got security')

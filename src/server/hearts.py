@@ -78,10 +78,8 @@ class Hearts:
         return score
 
     def shuffle(self, cards, n=1):
-        c = cards
         for i in range(0,n):
-            random.shuffle(c)
-        return c
+            random.shuffle(cards)
 
     def get_higher_card(self, cards, suit):
         hc = ''

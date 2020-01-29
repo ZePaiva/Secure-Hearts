@@ -1,0 +1,21 @@
+12:53:52 - CLIENT - INFO - Connected
+12:53:52 - CLIENT - DEBUG - logging new client, process started
+12:53:53 - CLIENT - DEBUG - CC - False
+12:53:53 - CLIENT - INFO - Trying to register player with username d
+12:53:53 - CLIENT - INFO - Generated CC certificate
+12:53:53 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PSS', 'hashing': 'SHA2'}}}
+12:53:53 - CLIENT - INFO - Loading keys
+12:53:53 - CLIENT - DEBUG - Loaded private key from /home/xano/Desktop/Folders/UA/S/security1920-g22/src/client/keys/d
+12:53:53 - CLIENT - WARNING - In server@request_crypto
+12:53:53 - SECURITY - DEBUG - Generating ECDH key pair
+12:53:53 - SECURITY - DEBUG - Generating salt
+12:53:53 - SECURITY - DEBUG - creating first message
+12:53:53 - SECURITY - DEBUG - signing first message
+12:53:53 - SECURITY - DEBUG - packaging first message
+12:53:53 - SECURITY - DEBUG - first package received
+12:53:53 - CLIENT - INFO - Sending first_package
+12:53:53 - CLIENT - INFO - Player username: d
+12:53:53 - CLIENT - INFO - Player registered
+12:54:02 - PLAYER - INFO - Requested to join table x1
+13:00:28 - CLIENT - INFO - Disconnected
+13:00:28 - CLIENT - INFO - Player requested leaving croupier. Goodbye!

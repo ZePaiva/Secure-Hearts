@@ -78,7 +78,7 @@ class CryptographyClient(object):
                 }
             ).encode('utf-8')
         )
-        sec_logger.debug("message:\n"+str(prep))
+        # sec_logger.debug("message:\n"+str(prep))
         # signing it
         sec_logger.debug('signing first message')
         if self.cc_on:
@@ -95,7 +95,7 @@ class CryptographyClient(object):
         # creating package
         sec_logger.debug('packaging first message')
         package={
-            'operation': 'client@register_player',
+            'operation': 'client@register_crypto',
             'message': prep.decode('utf-8'),
             'signature': signature,
             'cipher_suite': self.cipher_methods,

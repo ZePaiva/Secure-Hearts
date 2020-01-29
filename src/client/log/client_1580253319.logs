@@ -1,0 +1,20 @@
+23:15:19 - CLIENT - INFO - Connected
+23:15:20 - CLIENT - WARNING - Username already taken. Please choose another
+23:15:21 - CLIENT - WARNING - Username already taken. Please choose another
+23:15:24 - CLIENT - WARNING - Username already taken. Please choose another
+23:15:30 - CLIENT - INFO - Player registered
+23:15:34 - PLAYER - INFO - Requested usernames of online players
+23:15:35 - PLAYER - INFO - Requested online tables
+23:15:38 - PLAYER - INFO - Requested to create table x1
+23:15:38 - CLIENT - INFO - Player created table x1 with success
+23:15:38 - CLIENT - INFO - Player is now waiting for table to be ready... (1/4)
+23:15:38 - CLIENT - WARNING - To leave the table, please press CTRL-C
+23:16:23 - CLIENT - WARNING - Game started!
+23:16:40 - PLAYER - INFO - Requested to leave table x1
+23:16:40 - CLIENT - WARNING - The table you were in was deleted. You may now join a new table
+23:16:59 - CLIENT - INFO - Trying to disconnect...
+23:16:59 - CLIENT - INFO - Player left the table with success
+23:17:01 - CLIENT - INFO - Trying to disconnect...
+23:17:01 - CLIENT - ERROR - Server closed
+23:17:01 - CLIENT - INFO - Disconnected
+23:17:01 - CLIENT - INFO - Player requested leaving croupier. Goodbye!

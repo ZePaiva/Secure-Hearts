@@ -1,0 +1,25 @@
+11:25:40 - CLIENT - INFO - Connected
+11:25:40 - CLIENT - DEBUG - logging new client, process started
+11:25:41 - CLIENT - DEBUG - CC - False
+11:25:42 - CLIENT - INFO - Trying to register player with username dkls
+11:25:42 - CLIENT - INFO - Generated CC certificate
+11:25:43 - CLIENT - DEBUG - cipher_methods: {'hash': 'SHA2', 'sym': {'key_size': 256, 'algorithm': 'AES', 'mode': 'CBC'}, 'asym': {'cipher_padding': 'OAEP', 'sign': {'padding': 'PSS', 'hashing': 'SHA2'}}}
+11:25:43 - CLIENT - INFO - Loading keys
+11:25:43 - CLIENT - DEBUG - Stored private key @ /home/xano/Desktop/Folders/UA/S/security1920-g22/src/client/keys/dkls
+11:25:43 - CLIENT - DEBUG - Stored public key @ /home/xano/Desktop/Folders/UA/S/security1920-g22/src/client/keys/dkls
+11:25:43 - CLIENT - WARNING - In server@request_crypto
+11:25:43 - SECURITY - DEBUG - Generating ECDH key pair
+11:25:43 - SECURITY - DEBUG - Generating salt
+11:25:43 - SECURITY - DEBUG - creating first message
+11:25:43 - SECURITY - DEBUG - signing first message
+11:25:43 - SECURITY - DEBUG - packaging first message
+11:25:43 - SECURITY - DEBUG - first package received
+11:25:43 - CLIENT - INFO - Sending first_package
+11:25:43 - CLIENT - INFO - Player username: dkls
+11:25:43 - CLIENT - INFO - Player registered
+11:25:46 - PLAYER - INFO - Requested to join table x1
+11:25:46 - CLIENT - WARNING - Game started!
+11:28:16 - CLIENT - WARNING - The table you were in was deleted. You may now join a new table
+11:28:17 - CLIENT - INFO - Trying to disconnect...
+11:28:17 - CLIENT - INFO - Disconnected
+11:28:17 - CLIENT - INFO - Player requested leaving croupier. Goodbye!
