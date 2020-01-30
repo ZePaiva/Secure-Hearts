@@ -1,6 +1,7 @@
 # logging
 import logging
 import coloredlogs
+from termcolor import colored
 
 # server
 import socket
@@ -47,18 +48,15 @@ class SecureClient:
     def __init__(self, host='0.0.0.0', port=8080, log_level='DEBUG'):
         # logging
         coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=client_log_colors)
-
         # client socket
         self.host = host 
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.log_level=log_level
-
         # game related
         self.player = None
         self.uuid=None
         self.username=None
-
         # security related
         self.cc_api=None
         self.cc_cert=None
@@ -66,6 +64,23 @@ class SecureClient:
         self.cc_num=None
         self.security_handler=None
 
+    def send_payload(self, payload):
+        payload=json.dumps(payload)
+        while payload:
+            to_send=payload[:BUFFER_SIZE]
+            self.sock.send(to_send.encode('utf-8'))
+            payload=payload[BUFFER_SIZE:]
+
+    def receive_payload(self):
+        res=''
+        while True:
+            req=self.sock.recv(BUFFER_SIZE)
+            res+=req.decode('utf-8')
+            try:
+                r=json.loads(res)
+                return json.dumps(r)
+            except:
+                continue
 
     def register_player(self):
         try:
@@ -149,17 +164,12 @@ class SecureClient:
                                                     cc_on, self.cc_cert, self.cc_api
                                                     )
             client_logger.debug('Cryptography UP')
-            first_package=json.dumps(
-                self.security_handler.secure_init_message(self.username)
-            )
+            first_package=self.security_handler.secure_init_message(self.username)
             client_logger.debug('first message sent successfully')
             try:
-                while first_package:
-                    to_send=first_package[:BUFFER_SIZE]
-                    self.sock.send(to_send.encode())
-                    first_package=first_package[BUFFER_SIZE:]
+                self.send_payload(first_package)
             except OSError:
-                self.delete_client(conn)
+                self.exit()
                 client_logger.warning("Connection to server was closed")
         except KeyboardInterrupt:
             client_logger.info("Disconnected")
@@ -167,10 +177,7 @@ class SecureClient:
                 "operation":"client@disconnect_client"
             }
             payload=json.dumps(payload)
-            while payload:
-                to_send=payload[:BUFFER_SIZE]
-                self.sock.send(to_send.encode())
-                payload=payload[BUFFER_SIZE:]
+            self.send_payload(first_package)
             self.exit()
 
     def connect(self):
@@ -197,12 +204,12 @@ class SecureClient:
         while 1:
             try:
                 try:
-                    data=self.sock.recv(BUFFER_SIZE).decode('utf-8')
+                    data=self.receive_payload()
                 except ConnectionResetError: # connection was reseted
-                    self.delete_client(conn)
+                    self.exit()
                     break
                 except OSError: # connection was closed
-                    self.delete_client(conn)
+                    self.exit()
                     break
                 if not data:
                     break
@@ -284,15 +291,11 @@ class SecureClient:
                         self.player.table = None
                         self.player.playing = False
                         client_logger.warning("The table you were in was deleted. You may now join a new table")
-
                     # game started
                     elif operation == "croupier@give_shuffled_cards":
                         # sign cards [ TODO ]
                         self.player.return_shuffled_cards(payload["table"], payload["cards"], self.sock) 
-
-
                 # after payload's loop
-                
                 if(self.player):
                     if(self.player_not_in_table()):
                         self.menu_pre_game()
@@ -383,8 +386,7 @@ class SecureClient:
             payload={
                 "operation":"client@disconnect_client"
             }
-            payload=json.dumps(payload)
-            self.sock.send(payload.encode())
+            self.send_payload(payload)
             client_logger.info("Trying to disconnect...")
 
     def menu_in_game(self):

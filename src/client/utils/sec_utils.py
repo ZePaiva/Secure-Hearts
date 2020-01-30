@@ -110,7 +110,6 @@ def generate_sym_cipher(key, mode, alg, iv=None):
 #   -> bytes
 def generate_derived_key(password, hash_alg, length, salt=('sec_project_4_rec').encode('utf-8'), iterations=1):
     hashing=get_hash_alg(hash_alg)
-    info=('handshake').encode('utf-8')
     derivation=PBKDF2HMAC(
         algorithm=hashing,
         length=length//8,

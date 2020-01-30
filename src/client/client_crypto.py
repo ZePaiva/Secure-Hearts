@@ -34,8 +34,8 @@ class CryptographyClient(object):
             self.cc_cert=cert
 
         # security stuff
-        self.private_value=None                              # ephemeral private key (ECDH)
         self.old_private_key=None                            # needed to alter key in runtime
+        self.private_value=None                              # ephemeral private key (ECDH)
         self.public_value=None                               # ephemeral public key (ECDH) but it could be bread if coding was communist
         self.users_private_values={}
         self.users_public_values={}
@@ -49,6 +49,7 @@ class CryptographyClient(object):
         self.commit_v1=None
         self.commit_v2=None
         self.hand_committed=None
+
     # send the first message
     # message has format: 
     # {
@@ -263,7 +264,7 @@ class CryptographyClient(object):
         salt=self.derivations['server']-1
         self.other_public_value['server']=deserialize_key(package['dh_public_value'])
         self.other_salts['server']=base64.b64decode(package['salt'].encode('utf-8'))
-        dh_key = generate_key_dh(
+        dh_key=generate_key_dh(
             self.private_value,
             self.other_public_value['server'], 
             self.other_salts['server'],
@@ -317,6 +318,11 @@ class CryptographyClient(object):
                 sec_logger.debug('Received invalid signature from server, discarding this package')
                 return {'type': 'error', 'error': 'Bad new key'}
         sec_logger.debug('finished process of deciphering message')
+        # discarding old ECDH values
+        self.private_value=generate_dh()
+        self.public_value=self.private_value.public_key()
+        self.derivations['server']=0
+        self.salt_dict['server']=[]
         return message
 
     # ciphers message to a user, creating a secure tunnel
@@ -585,8 +591,8 @@ class CryptographyClient(object):
     def gen_bit_commitment(self, hand):
         sec_logger.debug('creating bit commitment')
         # generate random values
-        self.commit_v1=os.urandom(16)
-        self.commit_v2=os.urandom(16)
+        self.commit_v1=os.urandom(32)
+        self.commit_v2=os.urandom(32)
         hasher=get_hash_alg(self.cipher_methods['hashing'])
         hand=sorted(hand)
         self.hand_committed=hand
@@ -594,8 +600,42 @@ class CryptographyClient(object):
             hasher.update(card.encode('utf-8'))
         bit_commit=binascii.hexlify(hasher.finalize())
         sec_logger.debug('bit commitment generated')
-        return bit_commit
+        return self.commit_v1, bit_commit
 
     # secure deck
-    def secure_deck(self, )
-
+    def cipher_deck(self, deck, player, players):
+        # shuffle deck
+        sec_logger.debug('shuffling deck')
+        random.shuffle(deck)
+        # generate key
+        sec_logger.debug('generating key and cipher to secure deck')
+        deck_key=os.urandom(32)
+        # generate cipher
+        deck_cipher, deck_iv=generate_sym_cipher(
+            deck_key,
+            self.cipher_methods['sym']['mode'],
+            self.cipher_methods['sym']['algorithm']
+        )
+        # generate padder
+        sym_padding=PKCS7(
+            get_cipher_alg(
+                self.cipher_methods['sym']['algorithm'],
+                deck_key
+            ).block_size
+        ).padder
+        # ciphers deck
+        sec_logger.debug('ciphering deck')
+        encryptor=deck_cipher.encryptor()
+        cipher_deck=[
+            encryptor.update(
+                sym_padding.update(
+                    json.dumps(card).encode('utf-8')
+                )+sym_padding.finalize()
+            )+encryptor.finalize()
+            for card in deck
+        ]
+        # pick next player
+        sec_logger.debug('picking next player')
+        players=sorted(players)
+        next_player_spot=players.index(player)+1
+        return deck_key, cipher_deck, deck_iv, next_player_spot

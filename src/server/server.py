@@ -31,19 +31,16 @@ class SecureServer(object):
         # logging
         coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
         self.tables=tables
-
         # server socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind((host,port))
         self.sock.listen(4*self.tables)
         server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
-
         # game related
         self.clients = {}
         self.croupier = Croupier()
         server_logger.debug('Croupier UP')
-
         # security related
         self.cryptography=CryptographyServer(log_level)
         server_logger.debug('Cryptography UP')
@@ -70,6 +67,16 @@ class SecureServer(object):
             conn.send(to_send.encode('utf-8'))
             payload=payload[BUFFER_SIZE:]
 
+    def receive_payload(self, conn):
+        res=''
+        while True:
+            req=conn.recv(BUFFER_SIZE)
+            res+=req.decode('utf-8')
+            try:
+                r=json.loads(res)
+                return r
+            except:
+                continue
 
     def get_conn_from_username(self, username):
         for connection in self.clients.keys():
@@ -110,7 +117,7 @@ class SecureServer(object):
     def communication_thread(self, conn, addr):
         while 1:
             try:
-                data=conn.recv(BUFFER_SIZE)
+                payload=self.receive_payload(conn)
             except ConnectionResetError: # connection was reseted
                 self.delete_client(conn)
                 break
@@ -118,11 +125,10 @@ class SecureServer(object):
                 self.delete_client(conn)
                 break
             # client dead
-            if not data:
+            if not payload:
                 self.delete_client(conn)
                 break
             # parsing data
-            payload=json.loads(data)
             operation = payload["operation"]
             # MUST BE SAFE - handle client connecting
             if operation=="client@register_player":

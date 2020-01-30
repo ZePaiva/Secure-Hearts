@@ -1,6 +1,7 @@
 from bullet import *
 from utils.sec_utils import *
 
+# cipher picking auxiliar function
 def pick_ciphers(cc):
     hash_types=['MD5','SHA2','SHA3']
     sym_alg_types=['AES','CAM','FER']
@@ -90,3 +91,4 @@ def pick_ciphers(cc):
         suite=types[0]+"-"+types[1]+'-'+types[2]+'-'+types[3]+'-PSS-'+types[4]
     client_logger.info('SUITE: '+suite)
     return get_cipher_methods(suite)
+
