@@ -32,9 +32,13 @@ class SecureServer(object):
         coloredlogs.install(level=log_level, fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level_styles=level_colors, field_styles=server_log_colors)
         self.tables=tables
         # server socket
+        print("ola")
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print("ola")
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        print("ola")
         self.sock.bind((host,port))
+        print("ola")
         self.sock.listen(4*self.tables)
         server_logger.info('Server located @ HOST='+host+' | PORT='+str(port))
         # game related
@@ -74,6 +78,7 @@ class SecureServer(object):
             res+=req.decode('utf-8')
             try:
                 r=json.loads(res)
+                server_logger.debug(str(r))
                 return r
             except:
                 continue

@@ -1,4 +1,7 @@
 pyca==1.0.0
 bullet==2.1.0
-PyKCS11==1.5.5
+PyKCS11>=1.5.5
 pyOpenSSL==19.1.0
+coloredlogs==15.0.1
+termcolor==1.1.0
+keyboard==0.13.5

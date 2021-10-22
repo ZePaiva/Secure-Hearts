@@ -225,6 +225,7 @@ class CryptographyClient(object):
         if not set({'operation', 'package', 'cipher_suite', 'mac'}).issubset(set(secure_package.keys())):
             sec_logger.warning('incomplete message received from server')
             return {'operation': 'ERROR', 'error': 'incomplete message'}
+        # Check if cipher_suite matches the specified cipher methods
         if secure_package['cipher_suite']!=self.cipher_methods:
             sec_logger.warning('server changed cipher specs without warning')
             return {'operation': 'ERROR', 'error': 'bad cipher specs'}
@@ -257,6 +258,7 @@ class CryptographyClient(object):
                 secure_package['package'].encode()
             ).decode('utf-8')
         )
+        # Check if message is complete
         if not set({'dh_public_value','salt','iv','derivation','message'}).issubset(set(package.keys())):
             sec_logger.warning('incomplete message received from server')
             return {'operation': 'ERROR', 'error': 'incomplete message'}
@@ -264,6 +266,9 @@ class CryptographyClient(object):
         salt=self.derivations['server']-1
         self.other_public_value['server']=deserialize_key(package['dh_public_value'])
         self.other_salts['server']=base64.b64decode(package['salt'].encode('utf-8'))
+        print(self.salt_dict)
+        print(salt)
+        print(self.salt_dict['server'][0])
         dh_key=generate_key_dh(
             self.private_value,
             self.other_public_value['server'], 

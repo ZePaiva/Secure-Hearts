@@ -66,6 +66,7 @@ class SecureClient:
 
     def send_payload(self, payload):
         payload=json.dumps(payload)
+        client_logger.debug("payload: " + str(payload))
         while payload:
             to_send=payload[:BUFFER_SIZE]
             self.sock.send(to_send.encode('utf-8'))
@@ -219,6 +220,7 @@ class SecureClient:
                     operation = payload["operation"]
                     if(operation == "server@require_action"):
                         payload=self.security_handler.server_parse_security(payload)
+                        print(payload)
                         if(payload["answer"] == "player@request_create_table"):
                             if(payload["success"]):
                                 self.player.owner = True

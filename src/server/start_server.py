@@ -50,6 +50,7 @@ def main():
         except KeyboardInterrupt as e:
             sec_server.exit()
     except Exception as e:
+        print(e)
         if sec_server is not (None):
             sec_server.emergency_exit(e)
         exit(1)
